@@ -1,0 +1,1717 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Корни — семейный архив</title>
+<style>
+:root{
+  --bg:#101b17;--panel:#16231d;--card:#203328;
+  --line:#34483b;--text:#f3f0e6;--muted:#aebbae;
+  --gold:#dec28b;--dark:#142119;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,sans-serif}
+button,input,select,textarea{font:inherit}
+button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
+button{cursor:pointer;color:var(--text);background:#24382b;border:1px solid var(--line);padding:11px 15px;border-radius:12px;transition:.18s;min-height:44px}
+button:hover{background:#34503a;border-color:#81946d}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.primary{background:var(--gold);color:var(--dark);border-color:var(--gold);font-weight:750}
+.primary:hover{background:#eed8ad}
+.danger{color:#ffb5a5}
+header{height:80px;display:flex;align-items:center;gap:16px;padding:0 30px;border-bottom:1px solid var(--line)}
+.brand{font-size:31px;font-weight:850;letter-spacing:-1.8px}
+.brand span{color:var(--gold)}
+.header-note{color:var(--muted);font-size:12px}
+.header-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.notification-count{display:inline-grid;place-items:center;min-width:22px;height:22px;margin-left:5px;padding:0 6px;border-radius:20px;background:#c9a65c;color:#10251c;font-weight:800}
+.local{font-size:11px;color:var(--gold);border:1px solid #776649;border-radius:30px;padding:8px 12px;white-space:nowrap}
+.layout{display:grid;grid-template-columns:300px 1fr;height:calc(100dvh - 80px);transition:grid-template-columns .24s ease}
+aside{padding:28px 23px;border-right:1px solid var(--line);overflow:auto;min-width:0;transition:opacity .18s ease,transform .24s ease,padding .24s ease}
+.eyebrow{font-size:10px;font-weight:750;letter-spacing:2px;color:var(--gold)}
+h1{font-size:40px;line-height:1.06;letter-spacing:-1.9px;margin:20px 0}
+h2{font-size:24px;letter-spacing:-.7px;margin:8px 0}
+h3{font-size:16px}
+.muted{color:var(--muted);line-height:1.7}
+.intro{font-size:12px;margin-bottom:27px}
+label{display:block;color:var(--muted);font-size:12px;margin:15px 0}
+input,select,textarea{display:block;width:100%;margin-top:8px;padding:12px;background:#101b16;color:var(--text);border:1px solid var(--line);border-radius:11px;min-width:0}
+textarea{resize:vertical}
+.switch{display:flex;border:1px solid var(--line);border-radius:13px;padding:4px;margin-top:22px;gap:4px}
+.switch button{flex:1;background:none;border:0;padding:10px 5px;font-size:11px;min-height:44px}
+.switch button.active{background:var(--gold);color:var(--dark);font-weight:750}
+.help{font-size:12px;line-height:1.65;color:var(--muted)}
+.stats{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:24px 0;padding:20px 0}
+.stats strong{display:block;font-size:29px;color:var(--gold);font-weight:600}
+.stats span{font-size:11px;color:var(--muted)}
+.wide{width:100%}
+.aside-bottom{margin-top:26px;padding:16px;background:#1b2c22;border-radius:13px}
+.aside-bottom p{margin-bottom:0}
+.results{max-height:170px;overflow:auto}
+.results button{width:100%;text-align:left;font-size:12px;margin-top:5px;min-height:44px}
+.relationship-tool{margin:18px 0 4px;padding:14px;border:1px solid var(--line);border-radius:10px;background:#eee5d2}
+.relationship-tool summary{cursor:pointer;font-family:Georgia,"Times New Roman",serif;font-weight:700;color:#26362d;list-style:none}
+.relationship-tool summary::-webkit-details-marker{display:none}
+.relationship-tool summary:after{content:"＋";float:right;color:#8a6b30}.relationship-tool[open] summary:after{content:"−"}
+.relationship-tool label{margin:12px 0 0}.relationship-tool select{margin-top:6px;padding:10px}
+.relationship-result{margin:12px 0 0;padding:11px;border-left:3px solid #a98542;background:#faf6eb;color:#4f4b42;font-size:12px;line-height:1.55}
+.relationship-result strong{display:block;color:#17382b;font:700 15px/1.35 Georgia,"Times New Roman",serif;margin-bottom:4px}
+.relationship-path{color:#7b7467}
+main{position:relative;min-width:0;display:flex;flex-direction:column;background:radial-gradient(ellipse at 50% 50%,#273e2b66,transparent 70%),radial-gradient(#3e514033 1px,transparent 1px);background-size:auto,23px 23px}
+.main-top{display:flex;justify-content:space-between;align-items:center;padding:27px 30px;gap:15px;flex-wrap:wrap}
+.archive-name{color:var(--muted);font-size:12px}
+.view-toggle{display:flex;gap:6px;align-items:center}
+.view-toggle button{min-width:44px}
+.view-toggle button.active{background:var(--gold);color:var(--dark);font-weight:750}
+.focus-badge{display:flex;gap:8px;align-items:center;font-size:12px;color:#e4d4ac;background:#403b232f;border:1px solid #6c6045;border-radius:30px;padding:6px 6px 6px 14px}
+.focus-badge button{min-height:0;padding:6px 10px}
+.focus-badge select{width:auto;max-width:145px;margin:0;padding:6px 26px 6px 9px;min-height:0;background:#f8f2e6}
+.stage{flex:1;min-height:280px;position:relative;overflow:hidden}
+svg{display:block;width:100%;height:100%;position:absolute;inset:0;touch-action:none;cursor:grab}
+svg.dragging{cursor:grabbing}
+.edge{fill:none;stroke:#839276;stroke-width:1.6;opacity:.7;transition:opacity .22s,stroke .22s,stroke-width .22s,filter .22s}
+.edge.mother{stroke:#cfb18a;stroke-dasharray:5 5}
+.edge.spouse{stroke:var(--gold);stroke-dasharray:3 4;opacity:.9}
+.edge.lineage{stroke:#f3d18e;stroke-width:3.4;opacity:1;filter:drop-shadow(0 0 4px #e5bf72)}
+.edge.mother.lineage{stroke:#f2b997}
+.tree-has-lineage .edge:not(.lineage){opacity:.1}
+.node{cursor:pointer;transition:opacity .22s,filter .22s}
+.node rect{fill:#203328;stroke:#5b7056;stroke-width:1.2;transition:fill .2s,stroke .2s}
+.node:hover rect,.node:focus rect{fill:#314b34;stroke:#ead3a0}
+.node.female rect{fill:#343629;stroke:#91825e}
+.node.selected rect{stroke:var(--gold);stroke-width:2.5}
+.node.lineage rect{stroke:#e5c278;stroke-width:2}
+.node.lineage-selected{filter:drop-shadow(0 0 8px #e5bf7299)}
+.node.lineage-selected rect{fill:#3c4d31;stroke:#ffe0a0;stroke-width:3}
+.tree-has-lineage .node:not(.lineage){opacity:.26}
+.node text{fill:var(--text);pointer-events:none}
+.node .name{font-weight:650;font-size:17px}
+.node .date{fill:#c1c8b7;font-size:12.5px}
+.node .tag{fill:var(--gold);font-size:12px}
+.node .avatar{fill:#344b35;stroke:none}
+.node .initial{fill:var(--gold);font-size:17px;font-weight:600}
+.node .collapse-btn{cursor:pointer}
+.node .collapse-btn rect{fill:var(--gold);stroke:var(--gold)}
+.node .collapse-btn text{fill:var(--dark);font-size:14px;font-weight:800}
+.bottom-bar{padding:16px 25px;border-top:1px solid #34483b88;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.controls{display:flex;gap:5px;flex-wrap:wrap}
+.controls button{min-width:44px;min-height:44px}
+.legend{display:flex;gap:14px;font-size:11px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:18px;border-top:2px solid #839276;margin-right:6px;vertical-align:middle}
+.legend i.dashed{border-top:2px dashed #cfb18a}
+.legend i.gold{border-top:2px dashed var(--gold)}
+.empty{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;text-align:center;padding:32px;z-index:3}
+.empty .eyebrow{margin-bottom:8px}.empty h2{margin:6px 0 8px}.empty p{max-width:430px;margin:0;line-height:1.65}
+.empty-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:22px}
+.empty-actions button{min-width:176px}
+#demoButton{background:#f8f2e6;color:#284034;border-color:#bba982}
+#demoButton:hover{background:#ebe2cd}
+.list-wrap{position:absolute;inset:0;overflow:auto;padding:18px 22px}
+.list-table{width:100%;border-collapse:collapse;font-size:13px}
+.list-table th,.list-table td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.list-table th{color:var(--gold);font-size:11px;letter-spacing:1px;position:sticky;top:0;background:var(--bg)}
+.list-table tr:hover td{background:#1b2c22}
+.list-table button{min-height:0;padding:6px 10px}
+dialog{color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:22px;width:min(620px,calc(100% - 24px));max-height:90dvh;padding:27px;box-shadow:0 25px 100px #0008;overflow:auto;overscroll-behavior:contain}
+dialog::backdrop{background:#06110ab8;backdrop-filter:blur(5px)}
+.dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.close{font-size:24px;background:none;border:0;padding:5px 10px;min-height:44px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.form-actions{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap}
+.form-actions .primary{flex:1;min-width:200px}
+.error{white-space:pre-line;color:#ffb3a3;font-size:12px;min-height:1em}
+.divider{border:0;border-top:1px solid var(--line);margin:23px 0}
+.settings-actions{display:grid;gap:10px;margin-top:20px}
+.settings-actions button{text-align:left}
+.notice{padding:15px;border:1px solid #6c6045;background:#403b232f;border-radius:12px;color:#e4d4ac;font-size:12px;line-height:1.7}
+.activity{max-height:180px;overflow:auto;font-size:12px;color:var(--muted)}
+.activity p{border-bottom:1px solid var(--line);padding-bottom:10px}
+.submission-list{display:grid;gap:12px;margin-top:18px}.submission-card{padding:16px;border:1px solid var(--line);border-radius:9px;background:#faf6eb}.submission-card h3{font-size:20px;margin:0 0 6px}.submission-meta{color:var(--muted);font-size:12px;line-height:1.55}.submission-card p{line-height:1.55}.submission-actions{display:flex;gap:8px;margin-top:12px}.submission-actions button{flex:1}.success-panel{text-align:center;padding:28px 10px}.success-panel strong{display:block;font:700 25px/1.2 Georgia,"Times New Roman",serif;margin-bottom:10px}
+.toast{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);background:var(--gold);color:var(--dark);padding:13px 22px;border-radius:13px;z-index:100;box-shadow:0 8px 40px #0005;max-width:90vw;font-size:13px}
+.photo-row{display:flex;gap:12px;align-items:center;margin-top:8px}
+.photo-row img{width:56px;height:56px;border-radius:50%;object-fit:cover;border:1px solid var(--line)}
+.spouse-list{max-height:130px;overflow:auto;border:1px solid var(--line);border-radius:11px;padding:8px 10px;margin-top:8px;display:grid;gap:6px}
+.spouse-list label{display:flex;gap:8px;align-items:center;margin:0;font-size:13px;color:var(--text)}
+.spouse-list input{width:auto;margin:0}
+@media(min-width:1100px){.stage:after{content:"СОХРАНЯЕМ ИМЕНА · СОЕДИНЯЕМ ПОКОЛЕНИЯ";position:absolute;bottom:20px;left:30px;letter-spacing:2px;font-size:9px;color:#7e91765c;pointer-events:none}}
+@media(max-width:760px){
+ header{height:70px;padding:0 16px;gap:10px}.header-note,.local{display:none}.brand{font-size:27px}
+ .header-actions button{font-size:12px;padding:9px 12px;min-height:44px}
+ .layout{display:block;height:auto}aside{padding:22px;border-right:0;border-bottom:1px solid var(--line)}
+ h1{font-size:30px;margin:12px 0}h1 br{display:none}.intro,.aside-bottom{display:none}
+ .switch{margin-top:12px}.stats{padding:12px 0;margin:16px 0}.stats strong{font-size:24px}.relationship-tool{margin:14px 0}
+ main{height:78dvh;min-height:500px}.main-top{padding:20px 16px}.main-top h2{font-size:21px}
+ .bottom-bar{padding:12px}.legend{gap:8px;font-size:10px}
+ dialog{padding:21px}.grid{grid-template-columns:1fr}
+ .list-wrap{padding:10px}
+}
+
+/* Editorial archive theme */
+:root{
+  --bg:#eee8d8;--panel:#f6f1e5;--card:#fbf7ec;
+  --line:#c9bea5;--text:#17271f;--muted:#6d6a60;
+  --gold:#a98542;--dark:#10251c;
+}
+body{background:#eee8d8;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+header{height:72px;padding:0 28px;background:#10251c;color:#f7f1e4;border-bottom:1px solid #6f654f;box-shadow:0 8px 30px #10251c17;position:relative;z-index:20}
+.brand{font:700 37px/1 Georgia,"Times New Roman",serif;letter-spacing:-1.4px}.brand span{color:#c9a65c}
+.header-note{color:#d2c9b8;font-family:Georgia,"Times New Roman",serif;font-size:13px}
+.header-actions button{background:#19352a;color:#f7f1e4;border-color:#456052}.header-actions button:hover{background:#24483a;border-color:#bea466}
+.local{color:#e5cd94;border-color:#776d55;background:#172c24}
+.layout{grid-template-columns:292px 1fr;height:calc(100dvh - 72px)}
+aside{padding:30px 26px;color:#213026;border-right:1px solid #c8bea8;background:#f4efe2 url("assets/archive-paper.jpg") center/cover}
+.eyebrow{color:#7b6537;font-size:10px;letter-spacing:2.4px}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif}h1{font-size:43px;letter-spacing:-1.5px;margin:17px 0 14px}h2{letter-spacing:-.8px}
+.muted,.help{color:#6d6a60}.intro{font-family:Georgia,"Times New Roman",serif;font-size:14px;line-height:1.7}
+button{color:#213027;background:#f5f0e3;border-color:#c9bea5;border-radius:8px;box-shadow:0 1px 0 #fff8 inset}
+button:hover{background:#ebe2cd;border-color:#a68a50}.primary{background:#17382b;color:#fffaf0;border-color:#17382b}.primary:hover{background:#24503d}
+input,select,textarea{background:#faf6eb;color:#213027;border-color:#c9bea5;border-radius:7px;box-shadow:0 1px 0 #fff inset}
+input:focus,select:focus,textarea:focus{border-color:#9b7b3b}
+.switch{border-color:#c9bea5;border-radius:8px;background:#ede5d3}.switch button{color:#5f5d56;border-radius:6px;box-shadow:none}.switch button.active{background:#17382b;color:#fffaf0}
+.stats{border-color:#c9bea5}.stats strong{font-family:Georgia,"Times New Roman",serif;color:#17382b}.stats span{color:#716d62}
+.aside-bottom{background:#e9e0cc;border:1px solid #d2c7af}
+main{background:#f3eee1 url("assets/archive-paper.jpg") center/cover;transition:margin-right .24s ease}
+.main-top{padding:25px 30px 20px;border-bottom:1px solid #d4cab4;background:#f6f1e6cc;backdrop-filter:blur(8px);position:relative;z-index:5}
+.main-top h2{font-size:35px;margin:5px 0 0;color:#16271f}.archive-name{color:#777064}
+.view-toggle{border:1px solid #c9bea5;border-radius:8px;padding:3px}.view-toggle button{border:0;box-shadow:none}.view-toggle button.active{background:#17382b;color:#fffaf0}
+.focus-badge{background:#eee4cf;border-color:#b99c62;color:#4d463a;border-radius:8px}.focus-badge button{background:#f8f2e6}
+.stage{background:#f5f0e5aa}.stage:after{color:#8f816a66!important}
+svg{cursor:grab}
+.edge{stroke:#8d8069;stroke-width:1.5;opacity:.62}.edge.mother{stroke:#a68e69}.edge.spouse{stroke:#9b7b3b;opacity:.68}
+.edge.lineage{stroke:#9b752d;stroke-width:3.2;filter:drop-shadow(0 1px 1px #af874b66)}.edge.mother.lineage{stroke:#b08b55}
+.tree-has-lineage .edge:not(.lineage){opacity:.14}
+.node rect{fill:#faf6eb;stroke:#b9aa8c;stroke-width:1.2;filter:drop-shadow(0 4px 8px #5b4e3417)}
+.node:hover rect,.node:focus rect{fill:#fffaf0;stroke:#8e6e35}.node.female rect{fill:#f8f1e3;stroke:#b7a586}
+.node.lineage rect{stroke:#ad873b;stroke-width:1.8}.node.lineage-selected{filter:none}.node.lineage-selected rect{fill:#183a2d;stroke:#c6a35d;stroke-width:3;filter:drop-shadow(0 7px 13px #3b321c33)}
+.node text{fill:#202a23}.node .name{font-family:Georgia,"Times New Roman",serif;font-size:16px}.node .date{fill:#69675e}.node .tag{fill:#786847;font-family:Georgia,"Times New Roman",serif;font-style:italic}
+.node.lineage-selected text{fill:#fff9ed}.node.lineage-selected .date{fill:#e7ddc9}.node.lineage-selected .tag{fill:#d9c28f}
+.node .avatar{fill:#ded5c2}.node.lineage-selected .avatar{fill:#c5a45f}.node .initial{fill:#715d35}.node.lineage-selected .initial{fill:#17382b}
+.node .collapse-btn rect{fill:#c6a35d;stroke:#9d7a35;filter:none}.node .collapse-btn text{fill:#183026}
+.generation-label{fill:#675d4d;font-family:Georgia,"Times New Roman",serif;font-size:13px;letter-spacing:1.7px}.generation-sub{fill:#847866;font-family:Georgia,"Times New Roman",serif;font-size:12px;font-style:italic}.generation-rule{stroke:#cfc5af;stroke-width:1}
+.tree-has-lineage .node:not(.lineage){opacity:.22}
+.bottom-bar{padding:13px 24px;border-color:#c9bea5;background:#eee6d5}.legend{color:#666258}.legend i{border-color:#8d8069}.legend i.dashed{border-color:#a68e69}.legend i.gold{border-color:#9b7b3b}
+.controls button{background:#f8f3e7}
+.list-table th{color:#725c31;background:#eee7d7}.list-table th,.list-table td{border-color:#d3c9b4}.list-table tr:hover td{background:#eee5d2}
+dialog{background:#f6f1e5 url("assets/archive-paper.jpg") center/cover;color:#213027;border-color:#bfae8d;border-radius:10px;box-shadow:0 28px 80px #23312835}
+dialog::backdrop{background:#12261c70;backdrop-filter:blur(2px)}
+#personDialog:not(:modal){position:fixed;inset:72px 0 0 auto;margin:0;width:390px;max-height:none;height:calc(100dvh - 72px);border-width:0 0 0 1px;border-radius:0;padding:28px;box-shadow:-18px 0 50px #28302625;z-index:15}
+#personDialog .dialog-heading{align-items:flex-start;padding-bottom:20px;border-bottom:1px solid #c9bea5}
+.person-summary{display:flex;align-items:center;gap:14px;min-width:0}.person-avatar{width:58px;height:58px;flex:0 0 58px;border-radius:50%;display:grid;place-items:center;background:#17382b;color:#f3dfad;border:2px solid #b48c42;font:700 22px Georgia,"Times New Roman",serif;background-size:cover;background-position:center}.person-summary-copy{min-width:0}.person-summary-copy h2{font-size:30px;margin:2px 0 4px}.person-life{color:#756e61;font-family:Georgia,"Times New Roman",serif}
+#personDialog form{padding-bottom:20px}#personDialog .grid{grid-template-columns:1fr}#personDialog label{color:#6c665a}#personDialog .divider{border-color:#c9bea5}
+.profile-overview{padding:23px 0 8px}.profile-quote{margin:0 0 22px;color:#6b5b3f;font:italic 16px/1.55 Georgia,"Times New Roman",serif}.profile-facts{margin:0;display:grid;grid-template-columns:112px 1fr;gap:11px 14px;padding:18px 0;border-top:1px solid #c9bea5;border-bottom:1px solid #c9bea5}.profile-facts dt{color:#867d6e;font-size:12px}.profile-facts dd{margin:0;color:#283229}.profile-relations{padding:18px 0}.profile-relations h3{font-size:14px;margin:0 0 10px}.profile-relations button{padding:7px 10px;min-height:0;margin:0 6px 6px 0}.profile-overview-actions{display:flex;gap:8px}.profile-overview-actions .primary{flex:1}
+.quick-add-row{display:flex;gap:6px;flex-wrap:wrap;padding:14px 0 4px;border-top:1px solid #c9bea5;margin-top:16px}
+.quick-add-row button{min-height:38px;font-size:12px;padding:7px 11px}
+.spouse-list{border-color:#c9bea5;background:#faf6eb}.spouse-list label{color:#213027}
+.notice{background:#eee3cc;border-color:#c4a66c;color:#514a3e}.activity{color:#6d685d}.activity p{border-color:#d1c7b2}.danger{color:#a33f32}
+.toast{background:#17382b;color:#fff8ea;border-radius:8px}
+@media(min-width:1440px){body.drawer-open main{margin-right:390px}.drawer-open .main-top{padding-right:22px}.drawer-open .archive-name{display:none}}
+@media(min-width:761px){
+ body.sidebar-collapsed .layout{grid-template-columns:0 1fr}
+ body.sidebar-collapsed aside{opacity:0;transform:translateX(-24px);padding-left:0;padding-right:0;border-right:0;pointer-events:none}
+}
+@media(max-width:760px){
+ header{height:70px;background:#10251c}.layout{height:auto}.brand{font-size:29px}#sidebarToggle{display:none}
+ aside{padding:20px;background-color:#f4efe2}main{background-color:#f3eee1}.main-top{padding:18px 16px}.main-top h2{font-size:27px}
+ h1{font-size:34px;line-height:1.04;margin:14px 0}h1 br{display:block}
+ #personDialog{width:min(620px,calc(100% - 24px));height:auto;max-height:90dvh;border:1px solid #bfae8d;border-radius:10px;padding:21px}
+ .generation-label,.generation-sub,.generation-rule{display:none}
+}
+@media(min-width:761px) and (max-width:1439px){.drawer-open .main-top{padding-right:410px}.drawer-open .main-top h2{font-size:28px}.drawer-open .archive-name{display:none}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media print{
+ header .header-actions,aside,.bottom-bar,.controls,.toast,.view-toggle,.focus-badge,#listView .actions-col{display:none!important}
+ .layout{display:block;height:auto}
+ main{height:auto}
+ .stage{overflow:visible;height:auto;min-height:0}
+ svg{position:static;height:640px}
+ body{background:#fff;color:#000}
+ .list-wrap{position:static;overflow:visible}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Корни<span>.</span></div>
+  <div class="header-note">Частная история вашей семьи</div>
+  <div class="header-actions">
+    <button id="sidebarToggle" aria-expanded="true" aria-controls="workspaceSidebar" title="Скрыть боковую панель">← Панель</button>
+    <span class="local" id="storageStatus">Локальная версия</span>
+    <button id="guestAddButton" class="primary" hidden>＋ Добавить человека</button>
+    <button id="submissionsButton" hidden>Новые заявки <span class="notification-count" id="submissionCount">0</span></button>
+    <button id="undoButton" disabled title="Отменить последнее изменение (Ctrl+Z)">↩ Отмена</button>
+    <button id="settingsButton">⚙ Управление архивом</button>
+  </div>
+</header>
+<div class="layout">
+<aside id="workspaceSidebar">
+  <div class="eyebrow">СЕМЕЙНОЕ НАСЛЕДИЕ</div>
+  <h1>Память<br>поколений.</h1>
+  <p class="muted intro">За каждым именем — жизнь.<br>За каждой связью — история.</p>
+  <div class="switch" role="group" aria-label="Режим древа">
+    <button id="allMode" class="active" aria-pressed="true">Вся семья</button>
+    <button id="maleMode" aria-pressed="false">Мужские линии</button>
+  </div>
+  <p class="help" id="modeHelp">Мужчины, женщины и связи с обоими родителями.</p>
+  <label>Найти человека
+    <input id="search" type="search" placeholder="Имя, тейп, место…" autocomplete="off">
+  </label>
+  <label>Фильтр по тейпу
+    <input id="teipFilter" type="search" placeholder="Например: Беной…" autocomplete="off">
+  </label>
+  <div class="results" id="results" aria-live="polite"></div>
+  <details class="relationship-tool" id="relationshipTool">
+    <summary>Кем приходятся друг другу?</summary>
+    <label>Первый человек<select id="relationA" aria-label="Первый человек"></select></label>
+    <label>Второй человек<select id="relationB" aria-label="Второй человек"></select></label>
+    <div class="relationship-result" id="relationResult">Выберите двух людей — покажем степень и путь родства.</div>
+  </details>
+  <div class="stats">
+    <div><strong id="count">0</strong><span>человек в режиме</span></div>
+    <div><strong id="levels">0</strong><span>уровней поколений</span></div>
+  </div>
+  <button class="primary wide" id="addButton">＋ Добавить человека</button>
+  <div class="aside-bottom">
+    <div class="eyebrow">ИСТОРИЯ БЕЗ ДОГАДОК</div>
+    <p class="help">Записывайте источники. Неизвестные даты оставляйте пустыми. Тейп и тукхум указывайте по сведениям семьи.</p>
+  </div>
+  <p class="help">Локальное хранение — не резервная копия. Периодически скачивайте архив через управление.</p>
+</aside>
+<main>
+  <div class="main-top">
+    <div>
+      <div class="eyebrow">РОДОСЛОВНАЯ</div>
+      <h2 id="archiveTitle">Семейное древо</h2>
+    </div>
+    <span class="archive-name" id="demoLabel">Пример · вымышленные данные</span>
+    <div class="view-toggle" role="group" aria-label="Вид">
+      <button id="treeViewBtn" class="active" aria-pressed="true">Древо</button>
+      <button id="listViewBtn" aria-pressed="false">Список</button>
+    </div>
+    <span class="focus-badge" id="lineageBadge" hidden><b id="lineageName"></b><select id="lineageMode" aria-label="Режим подсветки родства"><option value="direct">Прямая линия</option><option value="ancestors">Только предки</option><option value="descendants">Только потомки</option><option value="blood">Все кровные</option></select><button id="lineageReset" aria-label="Сбросить подсветку родства">Сбросить</button></span>
+    <span class="focus-badge" id="focusBadge" hidden>Ветка: <b id="focusName"></b><button id="focusReset">Сбросить</button></span>
+  </div>
+  <div class="stage" id="stage">
+    <svg id="tree" role="group" aria-label="Интерактивная родословная">
+      <g id="viewport"></g>
+    </svg>
+    <div class="list-wrap" id="listView" hidden>
+      <table class="list-table">
+        <thead><tr><th>Имя</th><th>Годы</th><th>Тейп / место</th><th>Родители</th><th class="actions-col"></th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="empty" hidden>
+      <div class="eyebrow">ПЕРВАЯ ЗАПИСЬ</div>
+      <h2 id="emptyTitle">Начните с первого имени</h2>
+      <p class="muted" id="emptyText">Добавьте родственника — затем соедините его с родителями, супругами и детьми.</p>
+      <div class="empty-actions">
+        <button class="primary" id="emptyAddButton">＋ Добавить первого человека</button>
+        <button id="demoButton" title="Показать демо-пример">Посмотреть демо</button>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <div class="legend" aria-hidden="true"><span><i></i>Отец</span><span><i class="dashed"></i>Мать</span><span><i class="gold"></i>Супруги</span><span>Выберите человека — подсветится его линия</span></div>
+    <div class="controls">
+      <button id="collapseAll">Свернуть</button>
+      <button id="expandAll">Развернуть</button>
+      <button id="minus" aria-label="Уменьшить">−</button>
+      <button id="fit">Всё древо</button>
+      <button id="plus" aria-label="Увеличить">＋</button>
+    </div>
+  </div>
+</main>
+</div>
+<dialog id="personDialog">
+  <div class="dialog-heading">
+    <div class="person-summary">
+      <div class="person-avatar" id="personAvatar" aria-hidden="true">＋</div>
+      <div class="person-summary-copy"><div class="eyebrow">СЕМЕЙНЫЙ АРХИВ</div><h2 id="personHeading">Новый человек</h2><div class="person-life" id="personLife">Новая запись</div></div>
+    </div>
+    <button class="close" id="closePerson" aria-label="Закрыть">×</button>
+  </div>
+  <section class="profile-overview" id="profileOverview" hidden>
+    <p class="profile-quote" id="profileQuote"></p>
+    <dl class="profile-facts">
+      <dt>Полное имя</dt><dd id="profileFullName"></dd>
+      <dt>Тейп / тукхум</dt><dd id="profileClan"></dd>
+      <dt>Место рождения</dt><dd id="profileBirthPlace"></dd>
+      <dt>Родители</dt><dd id="profileParents"></dd>
+    </dl>
+    <div class="profile-relations" id="profileRelations"></div>
+    <div class="profile-overview-actions">
+      <button class="primary" id="editPersonButton" type="button">Редактировать</button>
+      <button id="profileFocusButton" type="button">Показать ветку</button>
+    </div>
+    <div class="quick-add-row" aria-label="Быстро добавить родственника">
+      <button id="quickSonButton" type="button" title="Добавить сына: он сразу появится ребёнком этого человека">＋ Сын</button>
+      <button id="quickDaughterButton" type="button" title="Добавить дочь: она сразу появится ребёнком этого человека">＋ Дочь</button>
+      <button id="quickFatherButton" type="button" title="Добавить отца: он сразу станет отцом этого человека">＋ Отец</button>
+      <button id="quickMotherButton" type="button" title="Добавить мать: она сразу станет матерью этого человека">＋ Мать</button>
+      <button id="quickSpouseButton" type="button" title="Добавить супруга/супругу">＋ Супруг(а)</button>
+    </div>
+  </section>
+  <form id="personForm">
+    <label>Полное имя *<input name="name" maxlength="180" required autocomplete="off"></label>
+    <label>Имя на чеченском языке<input name="native" maxlength="180" autocomplete="off"></label>
+    <label>Информация о человеке (необязательно)<input name="info" maxlength="80" autocomplete="off" placeholder="Например: lived in Grozny, teacher…"></label>
+    <div class="grid">
+      <label>Пол<select name="sex"><option value="U">Не указан</option><option value="M">Мужчина</option><option value="F">Женщина</option></select></label>
+      <label>Тейп<input name="teip" maxlength="120" autocomplete="off"></label>
+      <label>Год рождения<input name="birth" type="number" min="1" placeholder="1930"></label>
+      <label>Год смерти<input name="death" type="number" min="1" placeholder="2001"></label>
+      <label>Дата рождения<input name="birthFull" type="date"></label>
+      <label>Дата смерти<input name="deathFull" type="date"></label>
+      <label>Место рождения<input name="birthPlace" maxlength="120" autocomplete="off"></label>
+      <label>Место смерти<input name="deathPlace" maxlength="120" autocomplete="off"></label>
+    </div>
+    <p class="help">Год можно оставить пустым, если указана полная дата — год подставится сам. Приблизительные даты поясните в примечаниях.</p>
+    <div class="grid">
+      <label>Отец<select name="father"></select></label>
+      <label>Мать<select name="mother"></select></label>
+    </div>
+    <label>Тукхум<input name="tukhum" maxlength="120" autocomplete="off"></label>
+    <label>Супруг / супруга
+      <span class="help">Отметьте состоящих в браке. Связь сохраняется в обе стороны.</span>
+      <div class="spouse-list" id="spouseList"></div>
+    </label>
+    <label>Фотография
+      <input type="file" id="photoInput" accept="image/*">
+      <span class="help">До 5 МБ. Фото ужимается до ~320px и хранится локально в архиве.</span>
+      <div class="photo-row" id="photoRow" hidden>
+        <img id="photoPreview" alt="Фото человека">
+        <button type="button" id="photoRemove">Убрать фото</button>
+      </div>
+    </label>
+    <label>Информация о человеке (подробно, необязательно)<textarea name="notes" rows="3" maxlength="10000" placeholder="Биография, воспоминания, факты — заполняется по желанию"></textarea></label>
+    <label>Источник сведений<textarea name="source" rows="2" maxlength="3000" placeholder="Рассказ родственника, документ, год записи…"></textarea></label>
+    <p class="error" id="formError" role="alert"></p>
+    <div class="form-actions">
+      <button class="primary" type="submit">Сохранить сведения</button>
+      <button type="button" id="focusButton">Показать ветку</button>
+      <button class="danger" type="button" id="deleteButton">Удалить</button>
+    </div>
+    <div id="children"></div>
+  </form>
+</dialog>
+<dialog id="contributionDialog">
+  <div class="dialog-heading">
+    <div><div class="eyebrow">СЕМЕЙНОЕ ПОПОЛНЕНИЕ</div><h2>Добавить человека</h2></div>
+    <button class="close" id="closeContribution" aria-label="Закрыть">×</button>
+  </div>
+  <p class="muted">Расскажите, кого нужно добавить и кем этот человек приходится члену семьи. Запись появится в древе после подтверждения владельцем архива.</p>
+  <form id="contributionForm">
+    <div class="grid">
+      <label>Ваше имя *<input name="submittedBy" maxlength="120" required autocomplete="name"></label>
+      <label>Телефон или почта<input name="contact" maxlength="180" autocomplete="email"></label>
+    </div>
+    <label>Кому приходится *<select name="relativeId" required></select></label>
+    <label>Кем приходится *<select name="relation" required><option value="child">Ребёнок</option><option value="parent">Отец или мать</option><option value="spouse">Супруг или супруга</option><option value="sibling">Брат или сестра</option><option value="other">Другая связь</option></select></label>
+    <label id="secondParentField">Второй родитель<select name="secondParentId"></select><span class="help">Необязательно. Можно оставить пустым и дополнить связь позже.</span></label>
+    <hr class="divider">
+    <label>Полное имя человека *<input name="name" maxlength="180" required autocomplete="off"></label>
+    <div class="grid">
+      <label>Пол<select name="sex"><option value="U">Не указан</option><option value="M">Мужчина</option><option value="F">Женщина</option></select></label>
+      <label>Год рождения<input name="birth" type="number" min="1" placeholder="2026"></label>
+    </div>
+    <label>Место рождения<input name="birthPlace" maxlength="120" autocomplete="off"></label>
+    <label>Кратко о человеке<input name="info" maxlength="500" autocomplete="off" placeholder="Чем занимается, где живёт…"></label>
+    <label>Дополнительная информация<textarea name="notes" rows="4" maxlength="5000" placeholder="Важные факты, история, источник сведений…"></textarea></label>
+    <p class="error" id="contributionError" role="alert"></p>
+    <button class="primary wide" type="submit">Отправить на подтверждение</button>
+  </form>
+  <div class="success-panel" id="contributionSuccess" hidden><strong>Спасибо!</strong><p class="muted">Сведения отправлены владельцу архива. После подтверждения человек появится в древе.</p><button id="contributionAgain">Добавить ещё одного человека</button></div>
+</dialog>
+<dialog id="submissionsDialog">
+  <div class="dialog-heading">
+    <div><div class="eyebrow">ТРЕБУЕТ РЕШЕНИЯ</div><h2>Новые заявки</h2></div>
+    <button class="close" id="closeSubmissions" aria-label="Закрыть">×</button>
+  </div>
+  <p class="muted">Проверьте имя, даты и указанную связь. После подтверждения запись сразу появится в древе.</p>
+  <div class="submission-list" id="submissionList"></div>
+</dialog>
+<dialog id="settingsDialog">
+  <div class="dialog-heading">
+    <div><div class="eyebrow">ЛОКАЛЬНЫЙ АРХИВ</div><h2>Управление</h2></div>
+    <button class="close" id="closeSettings" aria-label="Закрыть">×</button>
+  </div>
+  <p class="notice">Это не защищённая административная панель. Любой, у кого есть доступ к этому браузеру, может открыть и изменить архив. Для совместной работы нужен сервер с персональными учётными записями.</p>
+  <form id="titleForm">
+    <label>Название архива<input id="titleInput" maxlength="100" required></label>
+    <button type="submit" class="primary">Сохранить название</button>
+  </form>
+  <div class="settings-actions">
+    <button id="copyContributionLink">🔗 Скопировать ссылку для родственников</button>
+    <button id="exportButton">↓ Скачать резервную копию JSON</button>
+    <button id="exportGedcom">↓ Скачать GEDCOM (.ged)</button>
+    <button id="exportCsv">↓ Скачать таблицу CSV</button>
+    <button id="importButton">↑ Восстановить из JSON</button>
+    <button id="importGedcomButton">↑ Импорт GEDCOM</button>
+    <button id="importCsvButton">↑ Импорт CSV</button>
+    <button id="restoreBackupButton">↩ Вернуть последнюю заменённую копию</button>
+    <button id="newButton" class="danger">Создать пустой архив</button>
+    <button id="logoutButton">Выйти из общей базы</button>
+  </div>
+  <input type="file" id="importFile" accept=".json,application/json" hidden>
+  <input type="file" id="importGedcomFile" accept=".ged,.txt" hidden>
+  <input type="file" id="importCsvFile" accept=".csv,text/csv" hidden>
+  <hr class="divider">
+  <h3>Последние действия</h3>
+  <p class="help">Локальный журнал, не защищённый от изменения. Хранятся последние 100 действий.</p>
+  <div id="activity" class="activity" aria-live="polite"></div>
+</dialog>
+<dialog id="loginDialog">
+  <div class="dialog-heading">
+    <div><div class="eyebrow">ОБЩАЯ БАЗА</div><h2>Вход</h2></div>
+  </div>
+  <p class="muted">Это общее семейное древо: правки увидят все, у кого есть доступ. Введите семейный пароль.</p>
+  <form id="loginForm">
+    <label>Семейный пароль<input id="loginPassword" type="password" required autocomplete="current-password"></label>
+    <p class="error" id="loginError" role="alert"></p>
+    <div class="form-actions">
+      <button class="primary" type="submit">Войти</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="confirmDialog">
+  <div class="dialog-heading">
+    <div><div class="eyebrow">ПОДТВЕРЖДЕНИЕ</div><h2 id="confirmHeading">Вы уверены?</h2></div>
+    <button class="close" id="confirmCancelTop" aria-label="Закрыть">×</button>
+  </div>
+  <p class="muted" id="confirmText" style="line-height:1.7"></p>
+  <div class="form-actions">
+    <button type="button" id="confirmCancel">Отмена</button>
+    <button type="button" class="primary" id="confirmOk">Подтвердить</button>
+  </div>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const KEY="korni-local-v1";
+const BACKUP_KEY="korni-local-v1-backup";
+const fields=["name","native","sex","teip","birth","death","father","mother","tukhum","notes","source"];
+const extFields=["birthFull","deathFull","birthPlace","deathPlace","photo","info"];
+const allFields=[...fields,...extFields];
+const numeric=new Set(["birth","death","father","mother"]);
+const form=$("#personForm");
+const svg=$("#tree");
+const viewport=$("#viewport");
+let mode="all",view="tree",editing=null,positions=new Map(),bounds={w:1,h:1};
+let camera={x:0,y:0,s:1},drag=null,toastTimer,storageFailed=false,stale=false,myRev=1;
+let collapsed=new Set(),focusId=null,highlightId=null,highlightMode="direct",pendingPhoto=null,removePhotoFlag=false;
+let serverMode=false,dirtyPush=false,pendingServerUpdate=false,pollTimer=null;
+let guestMode=false,inviteToken="",contributionPeople=[],pendingContributionCount=0,pendingContributions=[];
+const POLL_MS=(typeof window!=="undefined"&&window.__KORNI_POLL_MS)||15000;
+let undoStack=[];
+const pointers=new Map();
+let pinchDist=0;
+const NODE_W=244,NODE_H=108,NODE_CX=NODE_W/2,NODE_CY=NODE_H/2,COL_STEP=276,ROW_STEP=160,LABEL_W=145;
+function blankPerson(id){
+  return {id,name:"",native:"",sex:"U",teip:"",birth:null,death:null,father:null,mother:null,tukhum:"",notes:"",source:"",birthFull:"",deathFull:"",birthPlace:"",deathPlace:"",photo:"",info:"",spouses:[]};
+}
+function person(id,name,sex,birth,father=null,mother=null){
+  return {...blankPerson(id),name,sex,birth,father,mother,notes:"Демонстрационная запись. Человек вымышленный.",source:"Пример для знакомства с интерфейсом"};
+}
+function demo(){
+  return {format:"korni-local",version:1,rev:1,title:"История нашей семьи",demo:true,log:[],people:[
+    person(1,"Ахмед","M",1930),
+    person(2,"Аминат","F",1934),
+    person(3,"Муса","M",1956,1,2),
+    person(4,"Малика","F",1959),
+    person(5,"Хеда","F",1960,1,2),
+    person(6,"Идрис","M",1981,3,4),
+    person(7,"Зарема","F",1985,3,4),
+    person(8,"Мадина","F",1984),
+    person(9,"Адам","M",2008,6,8),
+    person(10,"Амина","F",2012,6,8)
+  ]};
+}
+function migrate(p){
+  const b=blankPerson(p.id);
+  for(const k of allFields){ if(p[k]!==undefined) b[k]=p[k]; }
+  if(!Array.isArray(p.spouses)) b.spouses=[];
+  else b.spouses=p.spouses.filter(Number.isSafeInteger);
+  return b;
+}
+function validatePeople(people){
+  if(!Array.isArray(people)||people.length>5000)throw Error("Поддерживается до 5000 записей в файле. Для больших древ нужна серверная версия.");
+  const ids=new Set(),map=new Map(),year=new Date().getFullYear();
+  const dateRe=/^\d{4}-\d{2}-\d{2}$/;
+  for(const raw of people){
+    const p=raw;
+    if(!p||!Number.isSafeInteger(p.id)||p.id<1||ids.has(p.id))throw Error("Некорректные или повторяющиеся идентификаторы.");
+    ids.add(p.id);map.set(p.id,p);
+    if(typeof p.name!=="string"||!p.name.trim()||p.name.length>180)throw Error("Проверьте имя человека (id "+p.id+").");
+    if(!["M","F","U"].includes(p.sex))throw Error("Некорректное значение пола.");
+    for(const [key,max] of [["native",180],["teip",120],["tukhum",120],["notes",10000],["source",3000],["birthPlace",120],["deathPlace",120],["info",80]]){
+      if(typeof p[key]!=="string"||p[key].length>max)throw Error("Некорректное поле "+key+" (id "+p.id+").");
+    }
+    for(const key of ["birthFull","deathFull"]){
+      if(typeof p[key]!=="string"||p[key].length>10)throw Error("Некорректная дата (id "+p.id+").");
+      if(p[key]&&!dateRe.test(p[key]))throw Error("Дата должна быть в формате ГГГГ-ММ-ДД (id "+p.id+").");
+    }
+    if(typeof p.photo!=="string"||p.photo.length>600000)throw Error("Фото слишком большое (id "+p.id+"). Удалите фото или выберите файл меньше.");
+    if(p.photo&&!p.photo.startsWith("data:image/"))throw Error("Некорректное фото (id "+p.id+").");
+    for(const key of ["birth","death"]){
+      if(p[key]!==null&&(!Number.isInteger(p[key])||p[key]<1||p[key]>year))throw Error("Год должен быть положительным и не позже текущего (id "+p.id+").");
+    }
+    if(p.birthFull&&p.birth&&Number(p.birthFull.slice(0,4))!==p.birth)throw Error("Год рождения не совпадает с полной датой (id "+p.id+").");
+    if(p.deathFull&&p.death&&Number(p.deathFull.slice(0,4))!==p.death)throw Error("Год смерти не совпадает с полной датой (id "+p.id+").");
+    if(p.birth&&p.death&&p.death<p.birth)throw Error("Год смерти раньше года рождения (id "+p.id+").");
+    if(!Array.isArray(p.spouses)||p.spouses.length>50)throw Error("Некорректный список супругов (id "+p.id+").");
+  }
+  const degree=new Map(),children=new Map(people.map(p=>[p.id,[]]));
+  for(const p of people){
+    let count=0;
+    for(const key of ["father","mother"]){
+      const id=p[key];if(id===null)continue;
+      if(!Number.isSafeInteger(id)||!map.has(id)||id===p.id)throw Error("Некорректная родительская связь (id "+p.id+").");
+      const parent=map.get(id);
+      if(key==="father"&&parent.sex==="F"||key==="mother"&&parent.sex==="M")throw Error("Проверьте пол выбранного родителя (id "+p.id+").");
+      if(parent.birth&&p.birth&&parent.birth>=p.birth)throw Error("Родитель должен родиться раньше ребёнка (id "+p.id+").");
+      children.get(id).push(p.id);count++;
+    }
+    if(p.father!==null&&p.father===p.mother)throw Error("Отец и мать не могут быть одной записью (id "+p.id+").");
+    for(const sid of p.spouses){
+      if(!Number.isSafeInteger(sid)||!map.has(sid)||sid===p.id)throw Error("Некорректная супружеская связь (id "+p.id+").");
+    }
+    if(new Set(p.spouses).size!==p.spouses.length)throw Error("Повторяющиеся супруги (id "+p.id+").");
+    degree.set(p.id,count);
+  }
+  const queue=people.filter(p=>degree.get(p.id)===0).map(p=>p.id);
+  for(let i=0;i<queue.length;i++){
+    for(const child of children.get(queue[i])){
+      degree.set(child,degree.get(child)-1);
+      if(degree.get(child)===0)queue.push(child);
+    }
+  }
+  if(queue.length!==people.length)throw Error("Связь создаёт цикл: человек не может быть предком самого себя.");
+}
+function parseArchive(value){
+  if(!value||value.format!=="korni-local"||value.version!==1)throw Error("Неизвестный формат архива.");
+  if(typeof value.title!=="string"||!value.title.trim()||value.title.length>100)throw Error("Некорректное название.");
+  if(!Array.isArray(value.people))throw Error("Нет списка людей.");
+  const people=value.people.map(migrate);
+  validatePeople(people);
+  return {
+    format:"korni-local",version:1,rev:Number.isSafeInteger(value.rev)&&value.rev>0?value.rev:1,
+    title:value.title.trim(),demo:value.demo===true,people,
+    log:Array.isArray(value.log)?value.log.filter(x=>x&&typeof x.at==="string"&&typeof x.text==="string").slice(0,100).map(x=>({at:x.at.slice(0,50),text:x.text.slice(0,300)})):[]
+  };
+}
+function fresh(){
+  return {format:"korni-local",version:1,rev:1,title:"Моя родословная",demo:false,log:[],people:[]};
+}
+let data=fresh();
+function loadLocal(){
+  try{
+    const saved=localStorage.getItem(KEY);
+    data=saved?parseArchive(JSON.parse(saved)):fresh();
+  }catch(e){data=fresh();storageFailed=true}
+  myRev=data.rev||1;
+}
+function notify(text){
+  clearTimeout(toastTimer);const t=$("#toast");t.textContent=text;t.hidden=false;
+  toastTimer=setTimeout(()=>t.hidden=true,6500);
+}
+let confirmResolve=null,confirmResult=false;
+function ask(text,heading){
+  $("#confirmText").textContent=text;
+  $("#confirmHeading").textContent=heading||"Вы уверены?";
+  confirmResult=false;
+  $("#confirmDialog").showModal();
+  return new Promise(res=>{confirmResolve=res});
+}
+function closeAsk(v){confirmResult=v;$("#confirmDialog").close()}
+$("#confirmDialog").addEventListener("close",()=>{if(confirmResolve){confirmResolve(confirmResult);confirmResolve=null}});
+$("#confirmOk").onclick=()=>closeAsk(true);
+$("#confirmCancel").onclick=()=>closeAsk(false);
+$("#confirmCancelTop").onclick=()=>closeAsk(false);
+function pushUndo(prev){undoStack.push(JSON.stringify(prev));if(undoStack.length>20)undoStack.shift();$("#undoButton").disabled=false}
+function doUndo(){
+  if(!undoStack.length)return;
+  if(stale){notify("Архив изменён в другой вкладке. Перезагрузите страницу перед отменой.");return}
+  const prev=JSON.parse(undoStack.pop());
+  prev.rev=myRev+1;prev.log=[{at:new Date().toISOString(),text:"Отмена последнего изменения"},...prev.log].slice(0,100);
+  try{localStorage.setItem(KEY,JSON.stringify(prev))}catch(e){notify("Не удалось сохранить отмену: хранилище недоступно.");return}
+  data=prev;myRev=prev.rev;
+  pushToServer(prev);
+  if(!undoStack.length)$("#undoButton").disabled=true;
+  render(true);renderActivity();notify("Изменение отменено.");
+}
+$("#undoButton").onclick=doUndo;
+document.addEventListener("keydown",e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="з"||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z")){
+    const tag=(e.target.tagName||"").toLowerCase();
+    if(tag==="input"||tag==="textarea"||tag==="select")return;
+    if($("#personDialog").open||$("#settingsDialog").open||$("#confirmDialog").open||$("#loginDialog").open)return;
+    e.preventDefault();doUndo();
+  }
+});
+function commit(next,text,opts={}){
+  if(stale)throw Error("Архив изменён в другой вкладке. Перезагрузите страницу, чтобы не потерять данные.");
+  if(opts.clearDemo!==false&&(text.startsWith("Добавлен")||text.startsWith("Изменён")||text.startsWith("Удалён")||text.startsWith("Архив")||text.startsWith("Импорт")))next.demo=false;
+  validatePeople(next.people);
+  if(opts.pushUndo!==false)pushUndo(data);
+  next.rev=myRev+1;
+  next.log=[{at:new Date().toISOString(),text},...next.log].slice(0,100);
+  try{localStorage.setItem(KEY,JSON.stringify(next))}
+  catch(e){ if(opts.pushUndo!==false)undoStack.pop(); throw Error("Браузер не разрешил сохранение или хранилище заполнено. Изменение не применено. Скачайте имеющийся архив.");}
+  data=next;myRev=next.rev;render(true);renderActivity();
+  pushToServer(next);
+}
+function applyPendingUpdate(){if(pendingServerUpdate){pendingServerUpdate=false;render(true);renderActivity()}}
+function backupCurrent(reason){
+  try{localStorage.setItem(BACKUP_KEY,JSON.stringify({at:new Date().toISOString(),reason,data}))}
+  catch(e){notify("Не удалось сохранить резервную копию для отката: хранилище браузера недоступно или заполнено.")}
+}
+function copy(){return JSON.parse(JSON.stringify(data))}
+function short(text,n){const a=Array.from(text);return a.length>n?a.slice(0,n-1).join("")+"…":text}
+function fmtDate(iso){ if(!iso)return ""; const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString("ru-RU"); }
+function years(p){
+  const b=p.birthFull?fmtDate(p.birthFull):(p.birth?String(p.birth):"");
+  const d=p.deathFull?fmtDate(p.deathFull):(p.death?String(p.death):"");
+  if(b&&d)return `${b} — ${d}`;
+  if(b)return `род. ${b}`;
+  if(d)return `ум. ${d}`;
+  if(p.birth&&p.death)return `${p.birth} — ${p.death}`;
+  if(p.birth)return `род. ${p.birth}`;
+  if(p.death)return `ум. ${p.death}`;
+  return "Годы не указаны";
+}
+function slug(s){return (s||"korni").toLowerCase().replace(/[^a-zа-я0-9]+/gi,"-").replace(/^-+|-+$/g,"").slice(0,40)||"korni"}
+function fetchTimeout(url,opts={},ms=6000){
+  return Promise.race([fetch(url,opts),new Promise((_,rej)=>setTimeout(()=>rej(Error("timeout")),ms))]);
+}
+function download(filename,content,mime){
+  const blob=content instanceof Blob?content:new Blob([content],{type:mime||"application/octet-stream"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+function el(tag,attrs={},text){
+  const n=document.createElementNS("http://www.w3.org/2000/svg",tag);
+  for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);
+  if(text!==undefined)n.textContent=text;
+  return n;
+}
+function selectedPeople(){return data.people.filter(p=>mode==="all"||p.sex==="M")}
+function parents(p,ids){return(mode==="male"?[p.father]:[p.father,p.mother]).filter(id=>id!==null&&ids.has(id))}
+function childrenOf(id){return data.people.filter(x=>x.father===id||x.mother===id).map(x=>x.id)}
+function ancestorsOf(id){
+  const seen=new Set([id]);const q=[id];
+  const map=new Map(data.people.map(p=>[p.id,p]));
+  while(q.length){const p=map.get(q.pop());if(!p)continue;for(const pid of [p.father,p.mother]){if(pid!=null&&!seen.has(pid)){seen.add(pid);q.push(pid)}}}
+  return seen;
+}
+function descendantsOf(id){
+  const seen=new Set([id]);const q=[id];
+  while(q.length){const cur=q.pop();for(const c of childrenOf(cur)){if(!seen.has(c)){seen.add(c);q.push(c)}}}
+  return seen;
+}
+function lineageOf(id){
+  return new Set([...ancestorsOf(id),...descendantsOf(id)]);
+}
+function bloodRelativesOf(id){
+  const result=ancestorsOf(id);
+  for(const ancestor of [...result])for(const relative of descendantsOf(ancestor))result.add(relative);
+  return result;
+}
+function highlightedPeople(){
+  if(highlightId==null)return null;
+  if(highlightMode==="ancestors")return ancestorsOf(highlightId);
+  if(highlightMode==="descendants")return descendantsOf(highlightId);
+  if(highlightMode==="blood")return bloodRelativesOf(highlightId);
+  return lineageOf(highlightId);
+}
+function ancestorDepths(id){
+  const out=new Map([[id,0]]),map=new Map(data.people.map(p=>[p.id,p])),q=[id];
+  for(let i=0;i<q.length;i++){
+    const cur=q[i],p=map.get(cur);if(!p)continue;
+    for(const parent of [p.father,p.mother])if(parent!=null&&!out.has(parent)){out.set(parent,out.get(cur)+1);q.push(parent)}
+  }
+  return out;
+}
+function familyPath(start,end,includeSpouses=true){
+  if(start===end)return [start];
+  const graph=new Map(data.people.map(p=>[p.id,new Set()]));
+  const link=(a,b)=>{if(graph.has(a)&&graph.has(b)){graph.get(a).add(b);graph.get(b).add(a)}};
+  for(const p of data.people){for(const parent of [p.father,p.mother])if(parent!=null)link(p.id,parent);if(includeSpouses)for(const spouse of (p.spouses||[]))link(p.id,spouse)}
+  const prev=new Map([[start,null]]),q=[start];
+  for(let i=0;i<q.length&&!prev.has(end);i++)for(const next of (graph.get(q[i])||[]))if(!prev.has(next)){prev.set(next,q[i]);q.push(next)}
+  if(!prev.has(end))return null;
+  const path=[];for(let cur=end;cur!=null;cur=prev.get(cur))path.push(cur);return path.reverse();
+}
+function generationWord(depth,male,up){
+  if(up){if(depth===1)return male?"отец":"мать";if(depth===2)return male?"дед":"бабушка";return "предок"}
+  if(depth===1)return male?"сын":"дочь";if(depth===2)return male?"внук":"внучка";return "потомок";
+}
+function cousinWord(degree,male){
+  const prefix=["","двоюродный","троюродный","четвероюродный"][degree]||`${degree+1}-юродный`;
+  return `${prefix} ${male?"брат":"сестра"}`;
+}
+function kinshipLabel(aId,bId){
+  const b=data.people.find(p=>p.id===bId);if(!b)return null;
+  const aUp=ancestorDepths(aId),bUp=ancestorDepths(bId);
+  if(aUp.has(bId)&&aUp.get(bId)>0)return generationWord(aUp.get(bId),b.sex==="M",true);
+  if(bUp.has(aId)&&bUp.get(aId)>0)return generationWord(bUp.get(aId),b.sex==="M",false);
+  let common=null;
+  for(const [id,da]of aUp){const db=bUp.get(id);if(id!==aId&&id!==bId&&db!=null&&(!common||da+db<common.da+common.db))common={id,da,db}}
+  if(common){
+    if(common.da===1&&common.db===1)return b.sex==="M"?"брат":"сестра";
+    if(common.db===1&&common.da>1)return b.sex==="M"?"дядя":"тётя";
+    if(common.da===1&&common.db>1)return b.sex==="M"?"племянник":"племянница";
+    const base=cousinWord(Math.min(common.da,common.db)-1,b.sex==="M");
+    const removed=Math.abs(common.da-common.db);return removed?`${base}, разница ${removed} покол.`:base;
+  }
+  const a=data.people.find(p=>p.id===aId);
+  if((a?.spouses||[]).includes(bId)||(b.spouses||[]).includes(aId))return b.sex==="M"?"муж":"жена";
+  const sharedChild=data.people.some(p=>(p.father===aId||p.mother===aId)&&(p.father===bId||p.mother===bId));
+  if(sharedChild)return "совместный родитель детей";
+  return null;
+}
+function renderRelationshipTool(){
+  const aSel=$("#relationA"),bSel=$("#relationB"),oldA=aSel.value,oldB=bSel.value;
+  const sorted=[...data.people].sort((a,b)=>a.name.localeCompare(b.name,"ru"));
+  for(const select of [aSel,bSel]){select.replaceChildren(new Option("Выберите…",""));for(const p of sorted)select.add(new Option(`${p.name} · ${p.birth||p.birthFull||"—"}`,p.id))}
+  if(sorted.some(p=>String(p.id)===oldA))aSel.value=oldA;if(sorted.some(p=>String(p.id)===oldB))bSel.value=oldB;
+  updateRelationship();
+}
+function updateRelationship(){
+  const aId=Number($("#relationA").value),bId=Number($("#relationB").value),box=$("#relationResult");
+  if(!aId||!bId){box.textContent="Выберите двух людей — покажем степень и путь родства.";return}
+  if(aId===bId){box.innerHTML="<strong>Это один и тот же человек</strong>Выберите разные записи.";return}
+  const map=new Map(data.people.map(p=>[p.id,p])),a=map.get(aId),b=map.get(bId),label=kinshipLabel(aId,bId),path=familyPath(aId,bId,true);
+  if(!path){box.innerHTML="<strong>Связь не найдена</strong>В архиве пока нет цепочки между этими людьми.";return}
+  const names=path.map(id=>map.get(id)?.name||"?").join(" → "),degree=Math.max(0,path.length-1);
+  box.replaceChildren();const strong=document.createElement("strong");strong.textContent=label?`${b.name} — ${label} для ${a.name}`:`${a.name} и ${b.name}: семейная связь`;
+  const meta=document.createElement("div");meta.textContent=`${label&&label!=="муж"&&label!=="жена"&&label!=="совместный родитель детей"?"Кровное родство":"Связь по семье"} · ${degree} ${degree===1?"шаг":"шага"}`;
+  const route=document.createElement("div");route.className="relationship-path";route.textContent=names;box.append(strong,meta,route);
+}
+function hiddenByCollapse(){
+  const hidden=new Set();
+  const q=[...collapsed];
+  while(q.length){const cur=q.pop();for(const c of childrenOf(cur)){if(!hidden.has(c)){hidden.add(c);q.push(c)}}}
+  return hidden;
+}
+function visiblePeople(){
+  let people=selectedPeople();
+  const teipQ=$("#teipFilter").value.trim().toLocaleLowerCase("ru");
+  const hidden=hiddenByCollapse();
+  people=people.filter(p=>!hidden.has(p.id));
+  if(focusId!=null){
+    const a=ancestorsOf(focusId),d=descendantsOf(focusId);
+    const keep=new Set([...a,...d]);
+    for(const p of data.people){for(const s of (p.spouses||[])){if(keep.has(p.id))keep.add(s);if(keep.has(s))keep.add(p.id)}}
+    people=people.filter(p=>keep.has(p.id));
+    if(teipQ)people=people.filter(p=>(p.teip||"").toLocaleLowerCase("ru").includes(teipQ));
+    return {people,teipFiltered:false};
+  }
+  if(teipQ)people=people.filter(p=>(p.teip||"").toLocaleLowerCase("ru").includes(teipQ));
+  return {people,teipFiltered:!!teipQ};
+}
+function render(fit=false){
+  $("#archiveTitle").textContent=data.title;
+  $("#storageStatus").textContent=serverMode?"Общая база":"Только на этом устройстве";
+  $("#storageStatus").title=serverMode?"Изменения доступны семье после сохранения":"Данные хранятся только в этом браузере";
+  $("#demoLabel").textContent=serverMode?"Общая база · правки видят все":(data.demo?"Пример · вымышленные данные":"Хранится в этом браузере");
+  const fb=$("#focusBadge");
+  if(focusId!=null){const f=data.people.find(p=>p.id===focusId);fb.hidden=false;$("#focusName").textContent=f?f.name:"";}else fb.hidden=true;
+  const lb=$("#lineageBadge"),selected=data.people.find(p=>p.id===highlightId);
+  if(selected){lb.hidden=false;$("#lineageName").textContent=selected.name;$("#lineageMode").value=highlightMode}else{highlightId=null;lb.hidden=true}
+  if(view==="list"){renderList();$("#tree").style.visibility="hidden";$("#listView").hidden=false;}
+  else{$("#tree").style.visibility="visible";$("#listView").hidden=true;renderTree();}
+  const {people}=visiblePeople();
+  const allIds=new Set(data.people.map(p=>p.id));
+  let lv=0;const seen=new Set(people.map(p=>p.id));
+  $("#count").textContent=people.length;
+  const archiveEmpty=data.people.length===0,showEmpty=people.length===0&&view!=="list";
+  $("#empty").hidden=!showEmpty;
+  $("#emptyTitle").textContent=archiveEmpty?"Начните с первого имени":"В этой ветке никого не видно";
+  $("#emptyText").textContent=archiveEmpty?"Добавьте родственника — затем соедините его с родителями, супругами и детьми.":"Сбросьте фильтр или разверните скрытые ветви, чтобы вернуть людей на древо.";
+  $("#emptyAddButton").hidden=!archiveEmpty;
+  $("#demoButton").hidden=!archiveEmpty||!!data.demo;
+  renderSearch();
+  renderRelationshipTool();
+  if(view==="tree"&&fit)requestAnimationFrame(fitTree);else if(view==="tree")applyCamera();
+}
+function renderTree(){
+  const {people}=visiblePeople(),ids=new Set(people.map(p=>p.id));
+  const byId=new Map(people.map(p=>[p.id,p])),level=new Map(people.map(p=>[p.id,0])),degree=new Map(),children=new Map(people.map(p=>[p.id,[]]));
+  for(const p of people){
+    const ps=parents(p,ids);degree.set(p.id,ps.length);
+    ps.forEach(id=>{if(children.has(id))children.get(id).push(p.id)});
+  }
+  const queue=people.filter(p=>!degree.get(p.id)).map(p=>p.id);
+  for(let i=0;i<queue.length;i++){
+    for(const id of (children.get(queue[i])||[])){
+      level.set(id,Math.max(level.get(id),level.get(queue[i])+1));
+      degree.set(id,degree.get(id)-1);
+      if(!degree.get(id))queue.push(id);
+    }
+  }
+  const pairKeys=new Set(),pairs=[];
+  const addPair=(a,b)=>{if(a==null||b==null||a===b||!ids.has(a)||!ids.has(b))return;const key=Math.min(a,b)+"-"+Math.max(a,b);if(!pairKeys.has(key)){pairKeys.add(key);pairs.push([a,b])}};
+  for(const p of people){for(const spouse of (p.spouses||[]))addPair(p.id,spouse);const ps=parents(p,ids);if(ps.length===2)addPair(ps[0],ps[1])}
+  const hasParents=new Map(people.map(p=>[p.id,parents(p,ids).length>0]));
+  for(let pass=0;pass<people.length+2;pass++){
+    let changed=false;
+    for(const [a,b]of pairs){
+      if(!hasParents.get(a)&&hasParents.get(b)&&level.get(a)!==level.get(b)){level.set(a,level.get(b));changed=true}
+      else if(hasParents.get(a)&&!hasParents.get(b)&&level.get(b)!==level.get(a)){level.set(b,level.get(a));changed=true}
+    }
+    for(const p of people){const ps=parents(p,ids);if(!ps.length)continue;const wanted=Math.max(...ps.map(id=>level.get(id)))+1;if(level.get(p.id)<wanted){level.set(p.id,wanted);changed=true}}
+    if(!changed)break;
+  }
+  const rows=new Map();
+  people.forEach(p=>{const l=level.get(p.id);if(!rows.has(l))rows.set(l,[]);rows.get(l).push(p)});
+  const lens=[...rows.values()].map(r=>r.length);
+  const graphWidth=(lens.length?Math.max(...lens):1)*COL_STEP;
+  const width=graphWidth+LABEL_W;
+  positions=new Map();
+  const root=new Map(people.map(p=>[p.id,p.id]));
+  const find=id=>{let r=id;while(root.get(r)!==r)r=root.get(r);while(root.get(id)!==id){const next=root.get(id);root.set(id,r);id=next}return r};
+  const join=(a,b)=>{const ra=find(a),rb=find(b);if(ra!==rb)root.set(rb,ra)};
+  for(const [a,b]of pairs)if(level.get(a)===level.get(b))join(a,b);
+  for(const [l,row]of [...rows.entries()].sort((a,b)=>a[0]-b[0])){
+    const grouped=new Map();for(const p of row){const r=find(p.id);if(!grouped.has(r))grouped.set(r,[]);grouped.get(r).push(p)}
+    const center=p=>{const xs=parents(p,ids).map(id=>positions.get(id)).filter(Boolean).map(o=>o.x+NODE_CX);return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:LABEL_W+graphWidth/2};
+    const groups=[...grouped.values()].sort((a,b)=>a.reduce((s,p)=>s+center(p),0)/a.length-b.reduce((s,p)=>s+center(p),0)/b.length||(a[0].birth||9999)-(b[0].birth||9999));
+    const ordered=groups.flatMap(group=>group.sort((a,b)=>(a.birth||9999)-(b.birth||9999)||(a.sex==="M"?-1:1)-(b.sex==="M"?-1:1)||a.name.localeCompare(b.name,"ru")));
+    ordered.forEach((p,i)=>positions.set(p.id,{x:LABEL_W+(graphWidth-ordered.length*COL_STEP)/2+i*COL_STEP+16,y:l*ROW_STEP+24}));
+  }
+  const maxLevel=rows.size?Math.max(...rows.keys()):0;
+  bounds={w:width,h:Math.max(185,(maxLevel+1)*ROW_STEP)};
+  $("#levels").textContent=rows.size;
+  viewport.replaceChildren();
+  const roman=["I","II","III","IV","V","VI","VII","VIII","IX","X"];
+  for(const [l]of [...rows.entries()].sort((a,b)=>a[0]-b[0])){
+    const y=l*ROW_STEP+52;
+    viewport.append(
+      el("text",{x:18,y,class:"generation-label"},`${roman[l]||l+1} ПОКОЛЕНИЕ`),
+      el("text",{x:18,y:y+20,class:"generation-sub"},l===0?"Наши корни":l===maxLevel?"Младшее поколение":"Семейная линия"),
+      el("line",{x1:18,y1:y+35,x2:126,y2:y+35,class:"generation-rule"})
+    );
+  }
+  for(const p of people){
+    const t=positions.get(p.id);if(!t)continue;
+    for(const id of parents(p,ids)){
+      const s=positions.get(id);if(!s)continue;
+      const middle=(s.y+NODE_H+t.y)/2;
+      viewport.append(el("path",{class:"edge"+(id===p.mother?" mother":""),"data-parent":id,"data-child":p.id,d:`M${s.x+NODE_CX},${s.y+NODE_H} C${s.x+NODE_CX},${middle} ${t.x+NODE_CX},${middle} ${t.x+NODE_CX},${t.y}`}));
+    }
+  }
+  const seenPair=new Set();
+  for(const p of people){
+    const t=positions.get(p.id);if(!t)continue;
+    for(const sid of (p.spouses||[])){
+      const key=Math.min(p.id,sid)+"-"+Math.max(p.id,sid);
+      if(seenPair.has(key))continue;seenPair.add(key);
+      const q=positions.get(sid);if(!q)continue;
+      const left=t.x<=q.x?t:q,right=t.x<=q.x?q:t,middle=(left.x+NODE_W+right.x)/2;
+      viewport.append(el("path",{class:"edge spouse",d:`M${left.x+NODE_W},${left.y+NODE_CY} C${middle},${left.y+NODE_CY} ${middle},${right.y+NODE_CY} ${right.x},${right.y+NODE_CY}`}));
+    }
+  }
+  for(const p of people){
+    const pos=positions.get(p.id);if(!pos)continue;
+    const node=el("g",{class:`node ${p.sex==="F"?"female":""} ${editing===p.id?"selected":""}`,transform:`translate(${pos.x} ${pos.y})`,tabindex:"0",role:"button","aria-label":`${p.name}, ${years(p)}. Открыть карточку. Двойной клик — свернуть ветку.`});
+    node.dataset.pid=p.id;
+    node.append(
+      el("title",{},p.name),
+      el("rect",{width:NODE_W,height:NODE_H,rx:16}),
+      el("circle",{cx:35,cy:35,r:23,class:"avatar"})
+    );
+    if(p.photo)node.append(el("image",{x:12,y:12,width:46,height:46,href:p.photo,preserveAspectRatio:"xMidYMid slice","clip-path":"circle(23px at 35px 35px)"}));
+    else node.append(el("text",{x:35,y:42,"text-anchor":"middle",class:"initial"},Array.from(p.name)[0]||""));
+    node.append(
+      el("text",{x:69,y:31,class:"name"},short(p.name,20)),
+      el("text",{x:69,y:51,class:"date"},short(years(p),26)),
+      el("text",{x:17,y:87,class:"tag"},short((p.birthPlace&&`род. ${p.birthPlace}`)||(p.teip&&`Тейп: ${p.teip}`)||p.info||p.native||"Место рождения не указано",34))
+    );
+    const kids=childrenOf(p.id).filter(id=>ids.has(id));
+    if(kids.length){
+      const g=el("g",{class:"collapse-btn",transform:`translate(${NODE_W-26} -12)`});
+      g.append(el("rect",{width:26,height:26,rx:13}),el("text",{x:13,y:19,"text-anchor":"middle"},collapsed.has(p.id)?"+":"–"));
+      g.addEventListener("click",e=>{e.stopPropagation();toggleCollapse(p.id)});
+      node.append(g);
+    }
+    node.addEventListener("click",()=>openPerson(p.id));
+    node.addEventListener("dblclick",e=>{e.preventDefault();toggleCollapse(p.id)});
+    node.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openPerson(p.id)}});
+    viewport.append(node);
+  }
+  applyLineageHighlight();
+  if(people.length>400&&focusId==null)notify("Большое древо ("+people.length+"). Сверните ветки двойным кликом или откройте карточку → «Показать ветку».");
+}
+function renderList(){
+  const q=$("#search").value.trim().toLocaleLowerCase("ru");
+  const {people}=visiblePeople();
+  const map=new Map(data.people.map(p=>[p.id,p]));
+  const rows=people.filter(p=>{
+    if(!q)return true;
+    return [p.name,p.native,p.teip,p.tukhum,p.birthPlace,p.deathPlace,String(p.birth||""),String(p.death||""),p.info,p.notes].join(" ").toLocaleLowerCase("ru").includes(q);
+  }).sort((a,b)=>(a.birth||9999)-(b.birth||9999)||a.name.localeCompare(b.name,"ru")).slice(0,500);
+  const tb=$("#listBody");tb.replaceChildren();
+  for(const p of rows){
+    const tr=document.createElement("tr");
+    const parNames=[p.father,p.mother].map(id=>id!=null&&map.has(id)?map.get(id).name:"").filter(Boolean).join(", ");
+    tr.innerHTML="";
+    const td1=document.createElement("td");td1.textContent=p.name+(p.native?" · "+p.native:"");
+    const td2=document.createElement("td");td2.textContent=years(p);
+    const td3=document.createElement("td");td3.textContent=[p.info,p.teip&&("Тейп: "+p.teip),p.birthPlace&&("род. "+p.birthPlace)].filter(Boolean).join("; ");
+    const td4=document.createElement("td");td4.textContent=parNames||"—";
+    const td5=document.createElement("td");td5.className="actions-col";
+    const b=document.createElement("button");b.textContent="Открыть";b.onclick=()=>openPerson(p.id);td5.append(b);
+    tr.append(td1,td2,td3,td4,td5);tb.append(tr);
+  }
+  $("#levels").textContent="—";
+}
+function toggleCollapse(id){
+  if(collapsed.has(id))collapsed.delete(id);else collapsed.add(id);
+  render(false);
+}
+$("#collapseAll").onclick=()=>{
+  const {people}=visiblePeople();
+  for(const p of people){if(childrenOf(p.id).length)collapsed.add(p.id)}
+  render(false);
+};
+$("#expandAll").onclick=()=>{collapsed.clear();render(false)};
+$("#demoButton").onclick=async ()=>{
+  if(data.demo)return;
+  if(data.people.length){
+    const ok=await ask("Показать демо-пример? Текущий архив сохранится в «Вернуть последнюю заменённую копию».","Демо");
+    if(!ok)return;
+    backupCurrent("before-demo");
+  }
+  commit(demo(),"Загружен демо-пример");
+  setView("tree");
+  notify("Демо-пример загружен. Свой архив вернёте через «Управление» → «Вернуть последнюю заменённую копию».");
+};
+$("#focusReset").onclick=()=>{focusId=null;render(true)};
+$("#lineageReset").onclick=()=>{highlightId=null;applyLineageHighlight();render(false)};
+$("#lineageMode").onchange=e=>{highlightMode=e.target.value;applyLineageHighlight()};
+function applyCamera(){viewport.setAttribute("transform",`translate(${camera.x} ${camera.y}) scale(${camera.s})`)}
+function availableTreeWidth(rect){
+  if(!document.body.classList.contains("drawer-open")||innerWidth>=1440||innerWidth<=760)return rect.width;
+  return Math.max(280,rect.width-Math.min(390,rect.width*.46));
+}
+function fitTree(targetId=null){
+  const r=svg.getBoundingClientRect();
+  if(!r.width||!r.height)return;
+  const usableWidth=availableTreeWidth(r);
+  camera.s=Math.max(.015,Math.min(1.3,(usableWidth-30)/bounds.w,(r.height-30)/bounds.h));
+  camera.x=(usableWidth-bounds.w*camera.s)/2;camera.y=(r.height-bounds.h*camera.s)/2;
+  const pos=targetId!=null?positions.get(targetId):null;
+  if(pos){
+    camera.x=usableWidth/2-(pos.x+NODE_CX)*camera.s;
+    camera.y=Math.min(24,Math.max(r.height-bounds.h*camera.s-24,r.height/2-(pos.y+NODE_CY)*camera.s));
+  }
+  applyCamera();
+}
+function zoom(factor,x,y){
+  const r=svg.getBoundingClientRect();x??=r.width/2;y??=r.height/2;
+  const scale=Math.max(.015,Math.min(3,camera.s*factor)),ratio=scale/camera.s;
+  camera.x=x-(x-camera.x)*ratio;camera.y=y-(y-camera.y)*ratio;camera.s=scale;applyCamera();
+}
+function centerOn(id){
+  const pos=positions.get(id);if(!pos)return;
+  const r=svg.getBoundingClientRect();
+  camera.s=Math.max(camera.s,0.85);
+  const usableWidth=availableTreeWidth(r);
+  camera.x=usableWidth/2-(pos.x+NODE_CX)*camera.s;camera.y=Math.max(20,r.height/2-(pos.y+NODE_CY)*camera.s);applyCamera();
+}
+svg.addEventListener("wheel",e=>{e.preventDefault();const r=svg.getBoundingClientRect();zoom(e.deltaY<0?1.12:1/1.12,e.clientX-r.left,e.clientY-r.top)},{passive:false});
+svg.addEventListener("pointerdown",e=>{
+  if(e.target.closest(".node")||(e.pointerType==="mouse"&&e.button!==0))return;
+  svg.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){const [a,b]=[...pointers.values()];pinchDist=Math.hypot(a.x-b.x,a.y-b.y);drag=null;svg.classList.remove("dragging");return}
+  if(drag)return;
+  drag={id:e.pointerId,x:e.clientX,y:e.clientY,cx:camera.x,cy:camera.y};
+  svg.classList.add("dragging");
+});
+svg.addEventListener("pointermove",e=>{
+  if(!pointers.has(e.pointerId))return;
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){
+    const [a,b]=[...pointers.values()];
+    const d=Math.hypot(a.x-b.x,a.y-b.y);
+    if(pinchDist>0){const r=svg.getBoundingClientRect();zoom(d/pinchDist,(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top)}
+    pinchDist=d;return;
+  }
+  if(!drag||drag.id!==e.pointerId)return;camera.x=drag.cx+e.clientX-drag.x;camera.y=drag.cy+e.clientY-drag.y;applyCamera();
+});
+function endPointer(e){pointers.delete(e.pointerId);if(pointers.size<2)pinchDist=0;if(drag&&drag.id===e.pointerId){drag=null;svg.classList.remove("dragging")}}
+for(const name of ["pointerup","pointercancel","lostpointercapture"])svg.addEventListener(name,endPointer);
+$("#plus").onclick=()=>zoom(1.25);$("#minus").onclick=()=>zoom(.8);$("#fit").onclick=()=>fitTree();
+function setMode(value){
+  mode=value;
+  $("#allMode").classList.toggle("active",mode==="all");$("#maleMode").classList.toggle("active",mode==="male");
+  $("#allMode").setAttribute("aria-pressed",mode==="all");$("#maleMode").setAttribute("aria-pressed",mode==="male");
+  $("#modeHelp").textContent=mode==="all"?"Мужчины, женщины и связи с обоими родителями.":"Только мужчины и связи «отец → сын». Другие записи не удаляются.";
+  render(true);
+}
+$("#allMode").onclick=()=>setMode("all");$("#maleMode").onclick=()=>setMode("male");
+$("#teipFilter").oninput=()=>render(false);
+function setView(v){
+  view=v;
+  $("#treeViewBtn").classList.toggle("active",v==="tree");$("#listViewBtn").classList.toggle("active",v==="list");
+  $("#treeViewBtn").setAttribute("aria-pressed",v==="tree");$("#listViewBtn").setAttribute("aria-pressed",v==="list");
+  render(false);
+}
+$("#treeViewBtn").onclick=()=>setView("tree");$("#listViewBtn").onclick=()=>setView("list");
+function renderSearch(){
+  const q=$("#search").value.trim().toLocaleLowerCase("ru");$("#results").replaceChildren();if(!q)return;
+  const found=data.people.filter(p=>[p.name,p.native,p.teip,p.tukhum,p.birthPlace,p.info,String(p.birth||"")].join(" ").toLocaleLowerCase("ru").includes(q));
+  for(const p of found.slice(0,30)){
+    const b=document.createElement("button");b.textContent=p.name+" · "+(p.birth||p.birthFull||"—");
+    b.onclick=()=>{
+      if(mode==="male"&&p.sex!=="M")setMode("all");
+      if(collapsed.size){collapsed.clear()}
+      openPerson(p.id);
+      if(view==="tree"){setTimeout(()=>centerOn(p.id),80)}
+    };
+    $("#results").append(b);
+  }
+  if(!found.length)$("#results").textContent="Ничего не найдено";
+  if(view==="list")renderList();
+}
+$("#search").oninput=renderSearch;
+function updateRelationshipResult(){
+  const aId=Number($("#relationA").value),bId=Number($("#relationB").value),box=$("#relationResult");
+  box.replaceChildren();
+  if(!aId||!bId){box.textContent="Выберите двух людей — покажем степень и путь родства.";return}
+  if(aId===bId){box.textContent="Это один и тот же человек.";return}
+  const map=new Map(data.people.map(p=>[p.id,p])),a=map.get(aId),b=map.get(bId),label=kinshipLabel(aId,bId),path=familyPath(aId,bId,true);
+  if(!a||!b){box.textContent="Запись не найдена.";return}
+  const title=document.createElement("strong");
+  title.textContent=label?`${b.name} — ${label} для ${a.name}`:`Между ${a.name} и ${b.name} кровная связь не найдена`;
+  box.append(title);
+  const line=document.createElement("span");line.className="relationship-path";
+  if(path){const links=path.length-1;line.textContent=`Путь: ${path.map(id=>map.get(id)?.name||"?").join(" → ")} · ${links} ${links===1?"связь":links>1&&links<5?"связи":"связей"}`}
+  else line.textContent="В архиве нет цепочки связей между этими записями.";
+  box.append(line);
+}
+function renderRelationshipTool(){
+  const aSel=$("#relationA"),bSel=$("#relationB"),oldA=aSel.value,oldB=bSel.value,sorted=[...data.people].sort((a,b)=>a.name.localeCompare(b.name,"ru"));
+  for(const select of [aSel,bSel]){
+    select.replaceChildren(new Option("Выберите…",""));
+    for(const p of sorted)select.add(new Option(`${p.name} · ${p.birth||p.birthFull||"—"}`,p.id));
+  }
+  if(sorted.some(p=>String(p.id)===oldA))aSel.value=oldA;
+  if(sorted.some(p=>String(p.id)===oldB))bSel.value=oldB;
+  updateRelationshipResult();
+}
+$("#relationA").onchange=updateRelationshipResult;
+$("#relationB").onchange=updateRelationshipResult;
+const contributionRelationLabels={child:"ребёнок",parent:"отец или мать",spouse:"супруг или супруга",sibling:"брат или сестра",other:"другой родственник"};
+function openContributionForm(){
+  const f=$("#contributionForm");f.reset();$("#contributionError").textContent="";f.hidden=false;$("#contributionSuccess").hidden=true;
+  const people=[...contributionPeople].sort((a,b)=>a.name.localeCompare(b.name,"ru")),select=f.elements.relativeId,second=f.elements.secondParentId;
+  select.replaceChildren(new Option("Выберите человека…",""));second.replaceChildren(new Option("Не указан",""));
+  for(const p of people){select.add(new Option(`${p.name} · ${p.birth||"—"}`,p.id));second.add(new Option(`${p.name} · ${p.birth||"—"}`,p.id))}
+  f.elements.birth.max=new Date().getFullYear();
+  updateContributionRelationFields();
+  if(!$("#contributionDialog").open)$("#contributionDialog").showModal();
+}
+function updateContributionRelationFields(){
+  const f=$("#contributionForm"),isChild=f.elements.relation.value==="child";$("#secondParentField").hidden=!isChild;if(!isChild)f.elements.secondParentId.value="";
+  for(const option of f.elements.secondParentId.options)option.disabled=option.value!==""&&option.value===f.elements.relativeId.value;
+}
+$("#guestAddButton").onclick=openContributionForm;
+$("#closeContribution").onclick=()=>$("#contributionDialog").close();
+$("#contributionAgain").onclick=openContributionForm;
+$("#contributionForm").elements.relation.onchange=updateContributionRelationFields;
+$("#contributionForm").elements.relativeId.onchange=updateContributionRelationFields;
+$("#contributionForm").onsubmit=async e=>{
+  e.preventDefault();const f=e.currentTarget,error=$("#contributionError");error.textContent="";
+  const body={submittedBy:f.elements.submittedBy.value.trim(),contact:f.elements.contact.value.trim(),relativeId:Number(f.elements.relativeId.value),secondParentId:f.elements.secondParentId.value?Number(f.elements.secondParentId.value):null,relation:f.elements.relation.value,name:f.elements.name.value.trim(),sex:f.elements.sex.value,birth:f.elements.birth.value?Number(f.elements.birth.value):null,birthPlace:f.elements.birthPlace.value.trim(),info:f.elements.info.value.trim(),notes:f.elements.notes.value.trim()};
+  const submit=f.querySelector('button[type="submit"]');submit.disabled=true;submit.textContent="Отправляем…";
+  try{
+    const r=await fetch(`/api/contributions?token=${encodeURIComponent(inviteToken)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const result=await r.json().catch(()=>({}));if(!r.ok)throw Error(result.error||"Не удалось отправить заявку.");
+    f.hidden=true;$("#contributionSuccess").hidden=false;
+  }catch(err){error.textContent=err.message}
+  finally{submit.disabled=false;submit.textContent="Отправить на подтверждение"}
+};
+function renderSubmissions(){
+  const list=$("#submissionList");list.replaceChildren();const map=new Map(data.people.map(p=>[p.id,p]));
+  if(!pendingContributions.length){list.textContent="Новых заявок нет.";return}
+  for(const item of pendingContributions){
+    const card=document.createElement("article");card.className="submission-card";
+    const h=document.createElement("h3");h.textContent=item.name;
+    const meta=document.createElement("div");meta.className="submission-meta";const relative=map.get(item.relativeId);
+    const second=item.secondParentId?map.get(item.secondParentId):null;
+    meta.textContent=`${contributionRelationLabels[item.relation]||"родственник"} для ${relative?.name||"удалённой записи"}${second?` · второй родитель: ${second.name}`:""} · ${item.birth||"год не указан"}${item.birthPlace?` · ${item.birthPlace}`:""}`;
+    const from=document.createElement("p");from.textContent=`Предложил(а): ${item.submittedBy}${item.contact?` · ${item.contact}`:""}`;
+    card.append(h,meta,from);
+    if(item.info||item.notes){const info=document.createElement("p");info.textContent=[item.info,item.notes].filter(Boolean).join(" — ");card.append(info)}
+    const actions=document.createElement("div");actions.className="submission-actions";
+    const approve=document.createElement("button");approve.className="primary";approve.textContent="Подтвердить";approve.onclick=()=>resolveContribution(item.id,"approve",approve);
+    const reject=document.createElement("button");reject.className="danger";reject.textContent="Отклонить";reject.onclick=async()=>{if(await ask(`Отклонить заявку «${item.name}»?`,"Отклонение"))resolveContribution(item.id,"reject",reject)};
+    actions.append(approve,reject);card.append(actions);list.append(card);
+  }
+}
+async function refreshContributions(announce=false){
+  if(!serverMode||guestMode)return;
+  try{
+    const r=await fetch("/api/contributions",{cache:"no-store"});if(!r.ok)return;
+    const result=await r.json(),previous=pendingContributionCount;pendingContributions=result.contributions||[];pendingContributionCount=pendingContributions.length;
+    $("#submissionCount").textContent=pendingContributionCount;$("#submissionsButton").hidden=pendingContributionCount===0;
+    if(announce&&pendingContributionCount>previous)notify(`Новых заявок: ${pendingContributionCount}. Проверьте их перед добавлением.`);
+    if($("#submissionsDialog").open)renderSubmissions();
+  }catch(e){notify("Не удалось обновить список заявок: нет связи с сервером.")}
+}
+async function resolveContribution(id,action,button){
+  button.disabled=true;
+  try{
+    const r=await fetch(`/api/contributions/${id}/${action}`,{method:"POST"}),result=await r.json().catch(()=>({}));
+    if(!r.ok)throw Error(result.error||"Не удалось обработать заявку.");
+    if(action==="approve"){
+      const next=parseArchive(await (await fetch("/api/archive",{cache:"no-store"})).json());data=next;myRev=next.rev;try{localStorage.setItem(KEY,JSON.stringify(next))}catch(e){}render(true);notify("Заявка подтверждена — человек добавлен в древо.");
+    }else notify("Заявка отклонена.");
+    await refreshContributions();renderSubmissions();
+  }catch(err){notify(err.message);button.disabled=false}
+}
+$("#submissionsButton").onclick=()=>{renderSubmissions();$("#submissionsDialog").showModal()};
+$("#closeSubmissions").onclick=()=>$("#submissionsDialog").close();
+function markSelected(id){
+  viewport.querySelectorAll(".node").forEach(n=>n.classList.toggle("selected",Number(n.dataset.pid)===id));
+}
+function applyLineageHighlight(){
+  const line=highlightedPeople();
+  svg.classList.toggle("tree-has-lineage",!!line);
+  viewport.querySelectorAll(".node").forEach(n=>{
+    const id=Number(n.dataset.pid),inLine=!!line&&line.has(id);
+    n.classList.toggle("lineage",inLine);
+    n.classList.toggle("lineage-selected",id===highlightId);
+  });
+  viewport.querySelectorAll(".edge").forEach(edge=>{
+    const parent=Number(edge.dataset.parent),child=Number(edge.dataset.child);
+    edge.classList.toggle("lineage",!!line&&!edge.classList.contains("spouse")&&line.has(parent)&&line.has(child));
+  });
+}
+function openPerson(id=null){
+  editing=id;const p=data.people.find(p=>p.id===id);form.reset();
+  if(p){
+    highlightId=p.id;applyLineageHighlight();const lb=$("#lineageBadge");lb.hidden=false;$("#lineageName").textContent=p.name;$("#lineageMode").value=highlightMode;
+    if(!$("#relationA").value){$("#relationA").value=String(p.id);updateRelationshipResult()}
+  }
+  const avatar=$("#personAvatar");avatar.textContent=p?(Array.from(p.name)[0]||""):"＋";avatar.style.backgroundImage=p?.photo?`url(${p.photo})`:"none";
+  $("#personLife").textContent=p?years(p):"Новая запись";
+  const overview=$("#profileOverview");overview.hidden=!p;form.hidden=!!p;
+  if(p){
+    const map=new Map(data.people.map(x=>[x.id,x]));
+    const parentNames=[p.father,p.mother].map(pid=>map.get(pid)?.name).filter(Boolean);
+    $("#profileQuote").textContent=p.info||p.notes.split(/\n/)[0]||"Человек жив, пока жива память о нём.";
+    $("#profileFullName").textContent=p.name+(p.native?` · ${p.native}`:"");
+    $("#profileClan").textContent=[p.teip&&`Тейп: ${p.teip}`,p.tukhum&&`Тукхум: ${p.tukhum}`].filter(Boolean).join(" · ")||"Не указано";
+    $("#profileBirthPlace").textContent=p.birthPlace||"Не указано";
+    $("#profileParents").textContent=parentNames.join(", ")||"Не указаны";
+    const rel=$("#profileRelations");rel.replaceChildren();
+    const kids=data.people.filter(x=>x.father===p.id||x.mother===p.id);
+    if(kids.length){const h=document.createElement("h3");h.textContent="Дети";rel.append(h);for(const child of kids){const b=document.createElement("button");b.type="button";b.textContent=child.name;b.onclick=()=>openPerson(child.id);rel.append(b)}}
+  }
+  pendingPhoto=null;removePhotoFlag=false;$("#photoInput").value="";$("#photoRow").hidden=true;
+  for(const key of ["father","mother"]){
+    const select=form.elements.namedItem(key);select.replaceChildren(new Option("Не указан / не указана",""));
+    data.people.filter(x=>x.id!==id&&[key==="father"?"M":"F","U"].includes(x.sex)).sort((a,b)=>a.name.localeCompare(b.name,"ru")).forEach(x=>select.add(new Option(`${x.name} · ${x.birth||x.birthFull||"—"}`,x.id)));
+  }
+  for(const key of allFields){
+    if(key==="photo")continue;
+    form.elements.namedItem(key).value=p?.[key]??(key==="sex"?"U":"");
+  }
+  if(p&&p.photo){$("#photoPreview").src=p.photo;$("#photoRow").hidden=false}
+  const sl=$("#spouseList");sl.replaceChildren();
+  const cands=data.people.filter(x=>x.id!==id).sort((a,b)=>a.name.localeCompare(b.name,"ru"));
+  if(!cands.length)sl.textContent="Пока некого выбрать.";
+  for(const c of cands){
+    const lab=document.createElement("label");
+    const cb=document.createElement("input");cb.type="checkbox";cb.value=c.id;cb.checked=!!p&&(p.spouses||[]).includes(c.id);
+    lab.append(cb,document.createTextNode(` ${c.name} · ${c.birth||c.birthFull||"—"}`));sl.append(lab);
+  }
+  form.elements.birth.max=form.elements.death.max=new Date().getFullYear();
+  $("#personHeading").textContent=p?.name||"Новый человек";$("#deleteButton").hidden=!p;$("#formError").textContent="";
+  $("#focusButton").hidden=!p;
+  // Быстрые кнопки скрыты, пока запись ещё не сохранена:
+  for(const id2 of ["quickSonButton","quickDaughterButton","quickFatherButton","quickMotherButton","quickSpouseButton"])$("#"+id2).hidden=!p;
+  $("#children").replaceChildren();
+  if(p){
+    const children=data.people.filter(x=>x.father===id||x.mother===id);
+    const spouses=(p.spouses||[]).map(sid=>data.people.find(x=>x.id===sid)).filter(Boolean);
+    if(spouses.length){
+      const h=document.createElement("h3");h.textContent="Супруги";$("#children").append(h);
+      for(const s of spouses){const b=document.createElement("button");b.type="button";b.textContent=s.name;b.style.margin="0 6px 6px 0";b.onclick=()=>openPerson(s.id);$("#children").append(b)}
+    }
+    if(children.length){
+      const h=document.createElement("h3");h.textContent="Дети";$("#children").append(h);
+      for(const child of children){
+        const b=document.createElement("button");b.type="button";b.textContent=child.name;b.style.margin="0 6px 6px 0";b.onclick=()=>openPerson(child.id);$("#children").append(b);
+      }
+    }
+  }
+  markSelected(id);
+  if(!$("#personDialog").open){if(matchMedia("(max-width:760px)").matches)$("#personDialog").showModal();else $("#personDialog").show()}
+  document.body.classList.add("drawer-open");
+  if(p&&view==="tree"&&!matchMedia("(max-width:760px)").matches){requestAnimationFrame(()=>fitTree(p.id));setTimeout(()=>fitTree(p.id),280)}
+}
+// Помогает быстрым кнопкам: запоминает связь, чтобы предзаполнить форму.
+let quickAddRelation=null,parentHint=null;
+function startQuickAdd(baseId,relation){
+  const base=data.people.find(x=>x.id===baseId);if(!base)return;
+  quickAddRelation=relation;parentHint={baseId,relation};
+  openPerson(null);
+  applyQuickAddDefaults();
+}
+function applyQuickAddDefaults(){
+  if(!quickAddRelation)return;
+  const base=data.people.find(x=>x.id===parentHint.baseId);if(!base){quickAddRelation=null;return}
+  const f=form;
+  if(quickAddRelation==="father"||quickAddRelation==="mother"){
+    // Добавляем родителя текущего человека: этот человек — ребёнок нового.
+    const childKey=quickAddRelation==="father"?"father":"mother";
+    if(base.sex==="M")f.elements.father.value=String(base.id);
+    else if(base.sex==="F")f.elements.mother.value=String(base.id);
+    // Пол нового родителя задаётся самой кнопкой.
+    f.elements.sex.value=quickAddRelation==="father"?"M":"F";
+    // Ориентировочный год рождения: минимум за 14 лет до рождения ребёнка (закрыто проверкой изгиба).
+    if(base.birth&&!f.elements.birth.value)f.elements.birth.value=Math.max(1,base.birth-25);
+  } else if(quickAddRelation==="son"||quickAddRelation==="daughter"){
+    f.elements.sex.value=quickAddRelation==="son"?"M":"F";
+    // Используем боковое родство: этот человек — родитель нового ребёнка.
+    if(base.sex==="M")f.elements.father.value=String(base.id);
+    else if(base.sex==="F")f.elements.mother.value=String(base.id);
+    // Если у родителя нет пола — подставим, что выберет пользователь.
+    if(base.birth&&!f.elements.birth.value)f.elements.birth.value=base.birth+25;
+  } else if(quickAddRelation==="spouse"){
+    if(base.birth&&!f.elements.birth.value)f.elements.birth.value=base.birth;
+    f.dataset.linkSpouseTo=String(base.id);
+  }
+  quickAddRelation=null;
+  setTimeout(()=>f.elements.name.focus(),60);
+}
+$("#addButton").onclick=()=>{quickAddRelation=null;parentHint=null;delete form.dataset.linkSpouseTo;openPerson()};
+$("#quickSonButton").onclick=()=>startQuickAdd(editing,"son");
+$("#quickDaughterButton").onclick=()=>startQuickAdd(editing,"daughter");
+$("#quickFatherButton").onclick=()=>startQuickAdd(editing,"father");
+$("#quickMotherButton").onclick=()=>startQuickAdd(editing,"mother");
+$("#quickSpouseButton").onclick=()=>startQuickAdd(editing,"spouse");
+$("#emptyAddButton").onclick=()=>$("#addButton").click();
+function setSidebarCollapsed(collapsed,persist=true){
+  document.body.classList.toggle("sidebar-collapsed",collapsed);
+  const button=$("#sidebarToggle");
+  button.textContent=collapsed?"☰ Панель":"← Панель";
+  button.setAttribute("aria-expanded",String(!collapsed));
+  button.title=collapsed?"Показать боковую панель":"Скрыть боковую панель";
+  syncSidebarA11y();
+  if(persist)try{localStorage.setItem("korni-sidebar-collapsed",collapsed?"1":"0")}catch(e){}
+  if(view==="tree"&&data.people.length){requestAnimationFrame(()=>fitTree(highlightId));setTimeout(()=>fitTree(highlightId),280)}
+}
+function syncSidebarA11y(){
+  const hidden=document.body.classList.contains("sidebar-collapsed")&&!matchMedia("(max-width:760px)").matches;
+  const sidebar=$("#workspaceSidebar");sidebar.inert=hidden;sidebar.setAttribute("aria-hidden",String(hidden));
+}
+$("#sidebarToggle").onclick=()=>setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+matchMedia("(max-width:760px)").addEventListener("change",syncSidebarA11y);
+try{setSidebarCollapsed(localStorage.getItem("korni-sidebar-collapsed")==="1",false)}catch(e){}
+$("#closePerson").onclick=()=>$("#personDialog").close();
+$("#personDialog").addEventListener("close",()=>{editing=null;quickAddRelation=null;parentHint=null;delete form.dataset.linkSpouseTo;document.body.classList.remove("drawer-open");markSelected(null);applyPendingUpdate();if(view==="tree"){requestAnimationFrame(()=>fitTree(highlightId));setTimeout(()=>fitTree(highlightId),280)}});
+$("#editPersonButton").onclick=()=>{$("#profileOverview").hidden=true;form.hidden=false;form.elements.name.focus()};
+function showFocusedBranch(){if(editing!=null){focusId=editing;collapsed.clear();$("#personDialog").close();setView("tree");render(true);notify("Показана ветка человека.")}}
+$("#focusButton").onclick=showFocusedBranch;
+$("#profileFocusButton").onclick=showFocusedBranch;
+$("#photoInput").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  if(f.size>5*1024*1024){$("#formError").textContent="Фото больше 5 МБ. Выберите файл меньше.";e.target.value="";return}
+  downscalePhoto(f).then(url=>{pendingPhoto=url;removePhotoFlag=false;$("#photoPreview").src=url;$("#photoRow").hidden=false})
+  .catch(()=>{$("#formError").textContent="Не удалось прочитать фото."});
+};
+$("#photoRemove").onclick=()=>{pendingPhoto=null;removePhotoFlag=true;$("#photoRow").hidden=true;$("#photoInput").value=""};
+function downscalePhoto(file){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file);const img=new Image();
+    img.onload=()=>{
+      const max=320;let {width:w,height:h}=img;const k=Math.min(1,max/Math.max(w,h));w=Math.round(w*k);h=Math.round(h*k);
+      const c=document.createElement("canvas");c.width=w||1;c.height=h||1;
+      c.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);
+      res(c.toDataURL("image/jpeg",0.82));
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("bad image"))};
+    img.src=url;
+  });
+}
+form.onsubmit=e=>{
+  e.preventDefault();
+  if(stale){$("#formError").textContent="Архив изменён в другой вкладке. Перезагрузите страницу перед сохранением.";return}
+  const isNew=editing==null||!data.people.some(x=>x.id===editing);
+  const id=isNew?Math.max(0,...data.people.map(x=>x.id))+1:editing;
+  const p=migrate({id});
+  for(const key of allFields){
+    if(key==="photo")continue;
+    const value=form.elements.namedItem(key).value.trim();p[key]=numeric.has(key)?value?Number(value):null:value;
+  }
+  if(p.birthFull&&!p.birth)p.birth=Number(p.birthFull.slice(0,4));
+  if(p.deathFull&&!p.death)p.death=Number(p.deathFull.slice(0,4));
+  if(removePhotoFlag)p.photo="";else if(pendingPhoto)p.photo=pendingPhoto;else if(!isNew){const old=data.people.find(x=>x.id===id);p.photo=old?old.photo:""}
+  const checked=[...$("#spouseList").querySelectorAll("input:checked")].map(cb=>Number(cb.value));
+  if(quickAddRelation==="spouse"&&parentHint){const sid=Number(form.dataset.linkSpouseTo);if(sid&&!checked.includes(sid))checked.push(sid);quickAddRelation=null;parentHint=null;form.dataset.linkSpouseTo="";}
+  p.spouses=checked;
+  try{
+    const next=copy(),index=next.people.findIndex(x=>x.id===id);
+    if(index<0)next.people.push(p);else next.people[index]=p;
+    for(const person of next.people){
+      if(person.id===id)continue;
+      const has=person.spouses.includes(id),want=checked.includes(person.id);
+      if(want&&!has)person.spouses.push(id);
+      if(!want&&has)person.spouses=person.spouses.filter(s=>s!==id);
+    }
+    commit(next,`${index<0?"Добавлен":"Изменён"}: ${p.name}`);
+    $("#personDialog").close();notify("Сведения сохранены в этом браузере.");
+  }catch(err){$("#formError").textContent=err.message}
+};
+$("#deleteButton").onclick=async ()=>{
+  const p=data.people.find(x=>x.id===editing);if(!p)return;
+  if(data.people.some(x=>x.father===p.id||x.mother===p.id)){$("#formError").textContent="У человека есть связанные дети. Сначала измените родительские связи в их карточках.";return}
+  const ok=await ask(`Удалить запись «${p.name}»? Восстановление возможно только из резервной копии.`,"Удаление");
+  if(!ok)return;
+  try{
+    const next=copy();
+    next.people=next.people.filter(x=>x.id!==p.id);
+    for(const person of next.people)person.spouses=(person.spouses||[]).filter(s=>s!==p.id);
+    commit(next,`Удалён: ${p.name}`);$("#personDialog").close();notify("Запись удалена.");
+  }catch(err){$("#formError").textContent=err.message}
+};
+function renderActivity(){
+  $("#activity").replaceChildren();
+  for(const item of data.log){
+    const p=document.createElement("p");p.textContent=`${new Date(item.at).toLocaleString("ru-RU")} · ${item.text}`;$("#activity").append(p);
+  }
+  if(!data.log.length)$("#activity").textContent="Изменений пока нет.";
+}
+$("#settingsButton").onclick=()=>{$("#titleInput").value=data.title;renderActivity();$("#settingsDialog").showModal()};
+$("#closeSettings").onclick=()=>$("#settingsDialog").close();
+$("#settingsDialog").addEventListener("close",()=>{applyPendingUpdate()});
+$("#copyContributionLink").onclick=async()=>{
+  if(!serverMode){notify("Ссылка для родственников доступна в общей серверной версии.");return}
+  try{
+    const r=await fetch("/api/contribution-link",{cache:"no-store"}),result=await r.json();if(!r.ok)throw Error();
+    await navigator.clipboard.writeText(result.url);notify("Ссылка для родственников скопирована.");
+  }catch(e){notify("Не удалось скопировать ссылку. Откройте сайт через защищённое соединение и попробуйте ещё раз.")}
+};
+$("#titleForm").onsubmit=e=>{
+  e.preventDefault();const title=$("#titleInput").value.trim();if(!title)return;
+  try{const next=copy();next.title=title;commit(next,"Изменено название архива",{clearDemo:false});notify("Название сохранено.")}
+  catch(err){notify(err.message)}
+};
+const today=()=>new Date().toISOString().slice(0,10);
+$("#exportButton").onclick=()=>{download(`korni-${slug(data.title)}-${today()}.json`,JSON.stringify(data,null,2),"application/json")};
+function gedcomEscape(s){return (s||"").replace(/@/g,"(at)")};
+$("#exportGedcom").onclick=()=>{
+  const lines=["0 HEAD","1 SOUR KORNI","1 GEDC","2 VERS 5.5","2 FORM LINEAGE-LINKED","1 CHAR UTF-8"];
+  for(const p of data.people){
+    lines.push(`0 @I${p.id}@ INDI`);
+    lines.push(`1 NAME ${gedcomEscape(p.name)}`);
+    lines.push(`1 SEX ${p.sex==="M"?"M":p.sex==="F"?"F":"U"}`);
+    if(p.birth||p.birthFull||p.birthPlace){lines.push("1 BIRT");if(p.birthFull)lines.push(`2 DATE ${p.birthFull.split("-").reverse().join(" ")}`);else if(p.birth)lines.push(`2 DATE ${p.birth}`);if(p.birthPlace)lines.push(`2 PLAC ${gedcomEscape(p.birthPlace)}`)}
+    if(p.death||p.deathFull||p.deathPlace){lines.push("1 DEAT");if(p.deathFull)lines.push(`2 DATE ${p.deathFull.split("-").reverse().join(" ")}`);else if(p.death)lines.push(`2 DATE ${p.death}`);if(p.deathPlace)lines.push(`2 PLAC ${gedcomEscape(p.deathPlace)}`)}
+    if(p.teip)lines.push(`1 NOTE Тейп: ${gedcomEscape(p.teip)}`);
+    if(p.info)lines.push(`1 NOTE ${gedcomEscape(p.info.slice(0,80))}`);
+    if(p.notes)lines.push(`1 NOTE ${gedcomEscape(p.notes.slice(0,200))}`);
+  }
+  const fams=new Map();
+  for(const p of data.people){
+    if(p.father==null&&p.mother==null)continue;
+    const key=`${p.father||0}-${p.mother||0}`;
+    if(!fams.has(key))fams.set(key,{husb:p.father,wife:p.mother,chil:[]});
+    fams.get(key).chil.push(p.id);
+  }
+  const paired=new Set([...fams.keys()]);
+  const byId=new Map(data.people.map(p=>[p.id,p]));
+  for(const p of data.people){
+    for(const sid of (p.spouses||[])){
+      if(p.id>sid)continue;
+      const q=byId.get(sid);if(!q)continue;
+      const a=p.sex==="M"?p.id:(q.sex==="M"?sid:(p.sex==="F"?sid:p.id));
+      const b=a===p.id?sid:p.id;
+      const k1=`${a}-${b}`;
+      if(paired.has(k1))continue;
+      paired.add(k1);
+      fams.set("s"+k1,{husb:a,wife:b,chil:[]});
+    }
+  }
+  let fi=1;const famOfChild=new Map();
+  for(const [key,f] of fams){
+    const fid=`@F${fi++}@`;
+    lines.push(`0 ${fid} FAM`);
+    if(f.husb)lines.push(`1 HUSB @I${f.husb}@`);
+    if(f.wife)lines.push(`1 WIFE @I${f.wife}@`);
+    for(const c of f.chil){lines.push(`1 CHIL @I${c}@`);famOfChild.set(c,fid)}
+  }
+  const result=lines.join("\n").replace(/(@I\d+@ INDI[\s\S]*?)(0 @I|0 @F|$)/g,(m,indi)=>indi);
+  download(`korni-${slug(data.title)}-${today()}.ged`,result,"text/plain");
+  notify("GEDCOM сохранён вместе с супружескими парами.");
+};
+function csvCell(v){v=v==null?"":String(v);return /[",\n;]/.test(v)?`"${v.replace(/"/g,'""')}"`:v}
+$("#exportCsv").onclick=()=>{
+  const head=["id","name","native","sex","teip","tukhum","birth","death","birthPlace","deathPlace","father","mother","spouses","info","notes","source"];
+  const rows=[head.join(";")];
+  for(const p of data.people)rows.push([p.id,p.name,p.native,p.sex,p.teip,p.tukhum,p.birth||"",p.death||"",p.birthPlace,p.deathPlace,p.father||"",p.mother||"",p.spouses.join("|"),p.info||"",p.notes,p.source].map(csvCell).join(";"));
+  download(`korni-${slug(data.title)}-${today()}.csv`,"\uFEFF"+rows.join("\n"),"text/csv");
+};
+$("#importButton").onclick=()=>$("#importFile").click();
+$("#importGedcomButton").onclick=()=>$("#importGedcomFile").click();
+$("#importCsvButton").onclick=()=>$("#importCsvFile").click();
+$("#importFile").onchange=async e=>{
+  const file=e.target.files[0];if(!file)return;
+  try{
+    if(file.size>15*1024*1024)throw Error("Файл слишком большой: максимум 15 МБ.");
+    const next=parseArchive(JSON.parse(await file.text()));
+    const ok=await ask("Заменить текущий архив данными из файла? Текущая копия сохранится в «Вернуть последнюю заменённую копию».","Импорт JSON");
+    if(!ok)return;
+    backupCurrent("before-json-import");download(`korni-backup-${today()}.json`,JSON.stringify(data,null,2),"application/json");
+    commit(next,"Архив восстановлен из файла");
+    $("#titleInput").value=data.title;$("#settingsDialog").close();notify("Архив восстановлен.");
+  }catch(err){notify("Не удалось импортировать: "+err.message)}
+  finally{e.target.value=""}
+};
+$("#importGedcomFile").onchange=async e=>{
+  const file=e.target.files[0];if(!file)return;
+  try{
+    if(file.size>15*1024*1024)throw Error("Файл слишком большой.");
+    const next=parseGedcom(await file.text());
+    const ok=await ask(`Найдено записей: ${next.people.length}. Заменить текущий архив? Текущая копия сохранится для отката.`,"Импорт GEDCOM");
+    if(!ok)return;
+    backupCurrent("before-gedcom-import");
+    commit(next,"Импорт из GEDCOM");
+    $("#settingsDialog").close();notify("GEDCOM импортирован.");
+  }catch(err){notify("Не удалось импортировать GEDCOM: "+err.message)}
+  finally{e.target.value=""}
+};
+function parseGedcom(text){
+  const lines=text.split(/\r?\n/);
+  const indis=new Map(),fams=new Map();
+  let cur=null,curFam=null,ctx=null;
+  for(const raw of lines){
+    const m=raw.match(/^(\d+)\s+(?:(@[^@]+@)\s+)?(\S+)(?:\s+(.*))?$/);
+    if(!m)continue;
+    const [,lvl,xref,tag,rest]=m;
+    if(lvl==="0"){
+      cur=null;curFam=null;ctx=null;
+      if(xref&&tag==="INDI"){cur={id:xref,name:"",sex:"U",birth:null,death:null,birthPlace:"",deathPlace:"",teip:"",notes:"",source:"",fams:[]};indis.set(xref,cur)}
+      else if(xref&&tag==="FAM"){curFam={husb:null,wife:null,chil:[]};fams.set(xref,curFam)}
+    }else if(cur&&lvl==="1"){
+      if(tag==="NAME")cur.name=(rest||"").replace(/\//g,"").trim()||"Без имени";
+      else if(tag==="SEX")cur.sex=rest==="M"?"M":rest==="F"?"F":"U";
+      else if(tag==="NOTE"){const v=(rest||"").trim();if(v.startsWith("Тейп:"))cur.teip=v.slice(5).trim().slice(0,120);else cur.notes+=(cur.notes?"\n":"")+v}
+      else if(tag==="SOUR")cur.source+=(cur.source?"\n":"")+(rest||"").trim();
+      else if(tag==="BIRT"||tag==="DEAT")ctx=tag;
+      else if(tag==="FAMC"){/* link via fam */}
+      else ctx=null;
+    }else if(curFam&&lvl==="1"){
+      if(tag==="HUSB")curFam.husb=rest?rest.trim():null;
+      else if(tag==="WIFE")curFam.wife=rest?rest.trim():null;
+      else if(tag==="CHIL"&&rest)curFam.chil.push(rest.trim());
+    }else if(cur&&lvl==="2"&&ctx){
+      if(tag==="DATE"){const y=(rest||"").match(/(\d{4})/);if(y){const yr=Number(y[1]);if(ctx==="BIRT")cur.birth=yr;else cur.death=yr}}
+      if(tag==="PLAC"){if(ctx==="BIRT")cur.birthPlace=(rest||"").slice(0,120);else cur.deathPlace=(rest||"").slice(0,120)}
+    }
+  }
+  if(!indis.size)throw Error("INDI-записи не найдены.");
+  const x2id=new Map();let n=1;
+  const people=[];
+  for(const [x,rec] of indis){x2id.set(x,n);people.push({...blankPerson(n),name:rec.name||"Без имени",sex:rec.sex,birth:rec.birth,death:rec.death,birthPlace:rec.birthPlace||"",deathPlace:rec.deathPlace||"",teip:rec.teip||"",notes:(rec.notes||"").slice(0,10000),source:(rec.source||"").slice(0,3000)});n++}
+  for(const f of fams.values()){
+    const hid=f.husb&&x2id.has(f.husb)?x2id.get(f.husb):null;
+    const wid=f.wife&&x2id.has(f.wife)?x2id.get(f.wife):null;
+    if(hid&&wid){const a=people.find(p=>p.id===hid),b=people.find(p=>p.id===wid);if(a&&!a.spouses.includes(wid))a.spouses.push(wid);if(b&&!b.spouses.includes(hid))b.spouses.push(hid)}
+    for(const c of f.chil){
+      if(!x2id.has(c))continue;
+      const ch=people.find(p=>p.id===x2id.get(c));
+      if(hid)ch.father=hid;if(wid)ch.mother=wid;
+    }
+  }
+  return {format:"korni-local",version:1,rev:1,title:"Импорт GEDCOM",demo:false,people,log:[]};
+}
+function parseCsvLine(line){
+  const out=[];let cur="",q=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(q){if(c==='"'){if(line[i+1]==='"'){cur+='"';i++}else q=false}else cur+=c}
+    else{if(c==='"')q=true;else if(c===";"){out.push(cur);cur=""}else cur+=c}
+  }
+  out.push(cur);return out;
+}
+$("#importCsvFile").onchange=async e=>{
+  const file=e.target.files[0];if(!file)return;
+  try{
+    const text=(await file.text()).replace(/^\uFEFF/,"");
+    const [head,...rows]=text.split(/\r?\n/).filter(r=>r.trim());
+    if(!head||!head.includes("name"))throw Error("Нет заголовка CSV.");
+    const idx=head.split(";").map(h=>h.trim());
+    const people=[];let n=1;
+    for(const r of rows){
+      const cells=parseCsvLine(r);const o={};
+      idx.forEach((h,i)=>o[h]=cells[i]||"");
+      if(!o.name||!o.name.trim())continue;
+      people.push({...blankPerson(n++),name:o.name.trim().slice(0,180),native:(o.native||"").slice(0,180),sex:["M","F","U"].includes(o.sex)?o.sex:"U",teip:(o.teip||"").slice(0,120),tukhum:(o.tukhum||"").slice(0,120),birth:o.birth?Number(o.birth):null,death:o.death?Number(o.death):null,birthPlace:(o.birthPlace||"").slice(0,120),deathPlace:(o.deathPlace||"").slice(0,120),father:o.father?Number(o.father):null,mother:o.mother?Number(o.mother):null,spouses:o.spouses?o.spouses.split("|").map(Number).filter(Number.isSafeInteger):[],info:(o.info||"").slice(0,80),notes:(o.notes||"").slice(0,10000),source:(o.source||"").slice(0,3000)});
+    }
+    if(!people.length)throw Error("Строк с именами не найдено.");
+    const ok=await ask(`Найдено строк: ${people.length}. Заменить текущий архив? Текущая копия сохранится для отката.`,"Импорт CSV");
+    if(!ok)return;
+    backupCurrent("before-csv-import");
+    const next={format:"korni-local",version:1,rev:1,title:"Импорт CSV",demo:false,people,log:[]};
+    commit(parseArchive(next),"Импорт из CSV");
+    $("#settingsDialog").close();notify("CSV импортирован.");
+  }catch(err){notify("Не удалось импортировать CSV: "+err.message)}
+  finally{e.target.value=""}
+};
+$("#restoreBackupButton").onclick=async ()=>{
+  try{
+    const raw=localStorage.getItem(BACKUP_KEY);
+    if(!raw){notify("Сохранённой копии для отката нет.");return}
+    const b=JSON.parse(raw);
+    const next=parseArchive(b.data);
+    const ok=await ask(`Вернуть копию от ${new Date(b.at).toLocaleString("ru-RU")} (${b.reason})? Текущий архив будет заменён.`,"Откат");
+    if(!ok)return;
+    backupCurrent("before-restore");
+    commit(next,"Архив откачен к резервной копии");
+    $("#settingsDialog").close();notify("Копия восстановлена.");
+  }catch(err){notify("Не удалось восстановить: "+err.message)}
+};
+$("#newButton").onclick=async ()=>{
+  const ok=await ask("Создать пустой архив? Текущие записи сохранятся в «Вернуть последнюю заменённую копию» и скачаются файлом.","Новый архив");
+  if(!ok)return;
+  try{
+    backupCurrent("before-new");download(`korni-backup-${today()}.json`,JSON.stringify(data,null,2),"application/json");
+    commit({format:"korni-local",version:1,rev:1,title:"Моя родословная",demo:false,people:[],log:[]},"Создан новый архив");
+    collapsed.clear();focusId=null;$("#settingsDialog").close();notify("Архив создан. Добавьте первого человека.");
+  }catch(err){notify(err.message)}
+};
+let resizeTimer;
+window.addEventListener("resize",()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(view==="tree")fitTree()},150)});
+window.addEventListener("storage",e=>{
+  if(e.key!==KEY||!e.newValue)return;
+  try{
+    const v=JSON.parse(e.newValue);
+    if(v.rev>myRev){stale=true;notify("Архив изменён в другой вкладке. Перезагрузите страницу, иначе сохранение заблокировано.")}
+  }catch(err){}
+});
+function showLogin(){if(!$("#loginDialog").open)$("#loginDialog").showModal()}
+$("#loginDialog").addEventListener("cancel",e=>e.preventDefault());
+$("#loginForm").onsubmit=async e=>{
+  e.preventDefault();
+  const pw=$("#loginPassword").value;
+  $("#loginError").textContent="";
+  try{
+    const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:pw})});
+    if(r.status===429){$("#loginError").textContent="Слишком много попыток. Подождите 5 минут.";return}
+    if(!r.ok){$("#loginError").textContent="Неверный пароль.";return}
+    $("#loginPassword").value="";
+    $("#loginDialog").close();
+    const next=parseArchive(await (await fetch("/api/archive",{cache:"no-store"})).json());
+    pushUndo(data);
+    data=next;myRev=next.rev;
+    try{localStorage.setItem(KEY,JSON.stringify(next))}catch(err){}
+    startPoll();render(true);renderActivity();refreshContributions();notify("Вы вошли. Это общая база — правки видят все.");
+  }catch(err){$("#loginError").textContent="Нет связи с сервером."}
+};
+$("#logoutButton").onclick=async ()=>{try{await fetch("/api/logout",{method:"POST"})}catch(e){notify("Не удалось завершить сессию на сервере: нет связи. Перезагрузите страницу и повторите выход.")}location.reload()};
+async function pushToServer(next,forceBase){
+  if(!serverMode)return false;
+  const baseRev=(forceBase!==undefined)?forceBase:next.rev-1;
+  try{
+    const r=await fetch("/api/archive",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({baseRev,archive:next})});
+    if(r.status===401){showLogin();return false}
+    if(r.status===409){
+      let cur=null;try{cur=(await r.json()).current}catch(e){}
+      onServerConflict(cur);
+      return false;
+    }
+    if(r.status===400){notify("Сервер отклонил изменение. Скачайте резервную копию из «Управления».");return false}
+    if(!r.ok)throw Error("push");
+    dirtyPush=false;return true;
+  }catch(e){
+    if(!dirtyPush){dirtyPush=true;notify("Нет связи с сервером. Изменение сохранено в этом браузере и отправится при появлении связи.");}
+    return false;
+  }
+}
+function onServerConflict(current){
+  if(current){
+    try{
+      backupCurrent("before-server-conflict");
+      const next=parseArchive(current);
+      data=next;myRev=next.rev;stale=false;
+      try{localStorage.setItem(KEY,JSON.stringify(next))}catch(e){}
+      render(true);renderActivity();
+    }catch(e){stale=true}
+  }else stale=true;
+  notify("Архив изменили с другого устройства. Показана общая версия. Ваша несохранённая правка — в «Управлении» → «Вернуть последнюю заменённую копию».");
+}
+function startPoll(){if(pollTimer||!serverMode)return;pollTimer=setInterval(pollServer,POLL_MS)}
+async function pollServer(){
+  if(!serverMode||document.hidden)return;
+  try{
+    await refreshContributions(true);
+    const r=await fetch("/api/rev",{cache:"no-store"});
+    if(r.status===401){showLogin();return}
+    if(!r.ok)return;
+    const j=await r.json();
+    if(dirtyPush){pushToServer(data);return}
+    if(j.rev>(myRev||1)){
+      const next=parseArchive(await (await fetch("/api/archive",{cache:"no-store"})).json());
+      data=next;myRev=next.rev;
+      try{localStorage.setItem(KEY,JSON.stringify(next))}catch(e){}
+      if($("#personDialog").open||$("#settingsDialog").open||$("#confirmDialog").open||$("#loginDialog").open){pendingServerUpdate=true;notify("Архив обновлён с другого устройства. Изменения появятся после закрытия окна.");}
+      else{render(true);renderActivity();notify("Архив обновлён с другого устройства.");}
+    }
+  }catch(e){notify("Не удалось обновить данные с сервера: проверьте соединение.")}
+}
+async function boot(){
+  const contributionParam=new URLSearchParams(location.search).get("contribute");
+  if(contributionParam){
+    try{
+      const r=await fetch(`/api/contribution/context?token=${encodeURIComponent(contributionParam)}`,{cache:"no-store"}),context=await r.json();
+      if(!r.ok)throw Error(context.error||"Ссылка недействительна.");
+      guestMode=true;inviteToken=contributionParam;contributionPeople=context.people||[];
+      data={format:"korni-local",version:1,rev:1,title:context.title||"Семейный архив",demo:true,log:[],people:[]};
+      $("#settingsButton").hidden=true;$("#undoButton").hidden=true;$("#guestAddButton").hidden=false;$(".local").textContent="Ссылка-приглашение";
+      $("#addButton").textContent="＋ Добавить человека";$("#addButton").onclick=openContributionForm;
+      $("#relationshipTool").hidden=true;$("#teipFilter").closest("label").hidden=true;
+      render(true);$("#demoButton").hidden=true;$("#demoLabel").textContent="Сведения попадут в древо после подтверждения";
+      $("#empty h2").textContent="Добавьте семейное событие";$("#empty p").textContent="Новая запись сначала отправится владельцу архива на проверку.";
+      openContributionForm();return;
+    }catch(err){setTimeout(()=>notify(err.message||"Ссылка для добавления недействительна."),300)}
+  }
+  loadLocal();
+  let srv=null;
+  try{
+    const r=await fetchTimeout("/api/me",{cache:"no-store"},6000);
+    if(r.status===200)srv="server";else if(r.status===401)srv="login";
+  }catch(e){srv=null}
+  if(srv==="server"){
+    serverMode=true;
+    try{
+      const cur=parseArchive(await (await fetch("/api/archive",{cache:"no-store"})).json());
+      if(data.people.length&&cur.rev===1&&!cur.people.length&&!cur.log.length){
+        const ok=await pushToServer(data,1);
+        if(ok){const a2=parseArchive(await (await fetch("/api/archive",{cache:"no-store"})).json());data=a2;myRev=a2.rev||1;}
+        else{data=cur;myRev=cur.rev||1}
+      }else{data=cur;myRev=cur.rev||1}
+      try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}
+    }catch(e){storageFailed=true}
+    startPoll();refreshContributions();
+  }else if(srv==="login"){
+    serverMode=true;
+    showLogin();
+  }
+  render(true);
+  if(storageFailed)setTimeout(()=>notify("Сохранённые данные недоступны или повреждены. Начат пустой архив. Не сохраняйте поверх важных данных без резервной копии."),500);
+}
+boot();
+</script>
+</body>
+</html>

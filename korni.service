@@ -1,0 +1,17 @@
+[Unit]
+Description=Korni — общее семейное древо
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/opt/korni
+Environment=KORNI_PASSWORD=поменяйте-меня
+Environment=PORT=3000
+ExecStart=/usr/bin/node /opt/korni/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

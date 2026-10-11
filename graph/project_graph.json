@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "protocol_version": "1.0",
+  "updated_at": "2026-09-12T09:37:43Z",
+  "nodes": [
+    {
+      "id": "project",
+      "kind": "project",
+      "name": "drevo",
+      "managed": true
+    },
+    {
+      "id": "stack:node-js",
+      "kind": "stack",
+      "name": "Node.js",
+      "managed": true
+    }
+  ],
+  "edges": [
+    {
+      "source": "project",
+      "target": "stack:node-js",
+      "type": "uses"
+    }
+  ]
+}

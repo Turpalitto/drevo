@@ -1,0 +1,13 @@
+# Данные и резервные копии — не в Git
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Зависимости и служебные файлы
+node_modules/
+.DS_Store
+*.log
+.env
+.env.*
