@@ -182,11 +182,18 @@ function validSession(token) {
 function clearSessions() {
   db.prepare("DELETE FROM sessions WHERE createdAt < ?").run(Date.now() - SESSION_TTL_MS);
 }
+// Чистим просроченные сессии по таймеру, а не только при обращении.
+setInterval(clearSessions, 6 * 3600 * 1000).unref();
 function parseCookies(req) {
   const out = {};
   for (const part of (req.headers.cookie || "").split(";")) {
     const i = part.indexOf("=");
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    if (i <= 0) continue;
+    const key = part.slice(0, i).trim();
+    const raw = part.slice(i + 1).trim();
+    // Битую процентную последовательность в cookie не считаем ошибкой сервера:
+    // берём значение как есть, чтобы запрос не падал в 500.
+    try { out[key] = decodeURIComponent(raw); } catch (e) { out[key] = raw; }
   }
   return out;
 }
@@ -212,7 +219,11 @@ function send(res, code, body, type = "application/json") {
   res.writeHead(code, { "Content-Type": type + "; charset=utf-8", "Content-Length": buf.length });
   res.end(buf);
 }
-const sendJson = (res, code, obj) => send(res, code, JSON.stringify(obj));
+// Ответы API не кэшируем: архив меняется, а клиент опрашивает /api/rev.
+const sendJson = (res, code, obj) => {
+  res.setHeader("Cache-Control", "no-store");
+  send(res, code, JSON.stringify(obj));
+};
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -236,11 +247,23 @@ function validContributionToken(token) {
 }
 
 const INDEX = fs.readFileSync(path.join(__dirname, "index.html"));
+const ASSETS_DIR = path.join(__dirname, "assets");
+const ASSET_RE = /^[A-Za-z0-9._-]+$/;
+const ASSET_TYPES = {
+  ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+  ".gif": "image/gif", ".svg": "image/svg+xml", ".ico": "image/x-icon",
+};
 
 function applySecurityHeaders(res) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "same-origin");
   res.setHeader("X-Frame-Options", "DENY");
+  // Скрипт и стили встроены в index.html, поэтому 'unsafe-inline' обязателен.
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+  );
 }
 
 // Защита Secure-cookie работает только на HTTPS (за прокси с HTTPS);
@@ -269,6 +292,17 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 503, { ok: false, error: "database unavailable" });
       }
     }
+
+    // Статика: бумажная текстура и другие файлы из assets/ (без обхода каталога).
+    if (req.method === "GET" && url.pathname.startsWith("/assets/")) {
+      const name = path.basename(url.pathname);
+      const file = path.join(ASSETS_DIR, name);
+      if (!ASSET_RE.test(name) || !fs.existsSync(file)) return sendJson(res, 404, { error: "not found" });
+      applySecurityHeaders(res);
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return send(res, 200, fs.readFileSync(file), ASSET_TYPES[path.extname(name).toLowerCase()] || "application/octet-stream");
+    }
+    if (req.method === "GET" && url.pathname === "/favicon.ico") return send(res, 204, "");
 
     if (url.pathname === "/api/contribution/context" && req.method === "GET") {
       if (!validContributionToken(url.searchParams.get("token"))) return sendJson(res, 403, { error: "Ссылка недействительна." });
@@ -303,7 +337,6 @@ const server = http.createServer(async (req, res) => {
     }
 
     // everything below requires session
-    clearSessions();
     const authed = validSession(parseCookies(req).korni_session);
     const needAuth = url.pathname.startsWith("/api/");
     if (needAuth && !authed) return sendJson(res, 401, { error: "auth" });
@@ -333,7 +366,12 @@ const server = http.createServer(async (req, res) => {
       catch (e) { return sendJson(res, 400, { error: "Проверка не пройдена." }); }
       const next = body.archive;
       next.rev = (cur.rev || 1) + 1;
-      next.log = Array.isArray(next.log) ? next.log.slice(0, 100) : [];
+      next.log = Array.isArray(next.log)
+        ? next.log.slice(0, 100).map((x) => ({
+            at: typeof x?.at === "string" ? x.at.slice(0, 50) : "",
+            text: typeof x?.text === "string" ? x.text.slice(0, 300) : "",
+          }))
+        : [];
       setArchive(next);
       return sendJson(res, 200, { ok: true, rev: next.rev });
     }
@@ -389,10 +427,15 @@ const server = http.createServer(async (req, res) => {
     }
     return sendJson(res, 404, { error: "not found" });
   } catch (e) {
+    console.error("Ошибка обработки запроса:", e && e.message ? e.message : e);
     return sendJson(res, 500, { error: "server error" });
   }
 });
 
+server.on("error", (e) => {
+  console.error(`Не удалось запустить сервер на порту ${PORT}: ${e.message}`);
+  process.exit(1);
+});
 server.listen(PORT, () => console.log(`Корни: общая база на порту ${PORT}, данные в ${DATA_DIR}`));
 
 // Graceful shutdown: аккуратно закрываем HTTP, затем SQLite, чтобы не потерять данные.

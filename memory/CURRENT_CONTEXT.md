@@ -1,43 +1,21 @@
 # Current Context
 
 <!-- PROJECT-MEMORY-KIT:AUTOMATIC -->
-- **Current focus:** Итерация 1: проверка Git, обработка ошибок клиента, восстановление из бэкапа
-- **Last completed step:** index.html: четыре пустых catch заменены понятными notify() — backupCurrent (резервная копия для отката), refreshContributions (обновление заявок), кнопка выхода, pollServer (опрос сервера). README.md: добавлена инструкция восстановления из data/backups/korni-<дата>.json через «Управление архивом» → «Восстановить из JSON».
-- **What changed:** index.html: четыре пустых catch заменены понятными notify() — backupCurrent (резервная копия для отката), refreshContributions (обновление заявок), кнопка выхода, pollServer (опрос сервера). README.md: добавлена инструкция восстановления из data/backups/korni-<дата>.json через «Управление архивом» → «Восстановить из JSON».
-- **What needs verification:** npm test — 8/8 ok. node --check инлайн-скрипта — OK. Восстановление проверено на копии базы: файл из data/backups принимается сервером как архив, rev растёт, sha256 рабочей data/korni.db не изменился.
-- **Next logical step:** Первый коммит после подтверждения, что data/ отсутствует в индексе; при необходимости — антиспам уведомлений.
-- **Important warnings:** Уведомление об ошибке выхода может не отобразиться: сразу после notify вызывается location.reload(). Уведомления в refreshContributions и pollServer при офлайне могут повторяться каждые 15 секунд.
-- **Affected files:** index.html, README.md
-- **Git status:** A  .dockerignore
-A  .env.example
-A  .freebuff/project-id
-A  .gitignore
-A  AGENTS.md
-A  ARCHITECTURE.md
-A  DECISIONS.md
-A  Dockerfile
-A  PROJECT_STATE.md
-A  PROMPT-POLISH.md
-A  README-HOME.md
-AM README.md
-A  TODO.md
-A  amvera.yaml
-A  amvera.yml
-A  assets/archive-paper.jpg
-A  design-qa.md
-A  graph/project_graph.json
-AM index.html
-A  korni.service
-AM memory/.project-memory.json
-A  memory/CURRENT_CONTEXT.md
-A  memory/README.md
-A  memory/sessions/2026-09-12_12-41_session.md
-A  memory/sessions/2026-09-12_13-10_session.md
-A  memory/sessions/2026-09-13_10-50_interactive-lineage-and-kinship.md
-A  memory/sessions/2026-09-13_11-32_family-contribution-approval-flow.md
-A  memory/sessions/2026-09-14_08-36_workspace-refinement.md
-A  package.json
-A  server.js
-A  start-home.bat
-A  start-home.sh
-A  test/server.test.js
+- **Current focus:** Итерация 2 (продолжение): исправление GEDCOM-экспорта, кэш API, устойчивость cookie, чистка конфигов
+- **Last completed step:** index.html: GEDCOM-экспорт переписан — убрана регулярка, которая съедала маркеры '0 @I…@ INDI' и '0 @F…@ FAM' и ломала файл; дата теперь в формате GEDCOM '12 MAY 1950' вместо числового месяца; добавлены ссылки '1 FAMC' от ребёнка к семье и завершающий '0 TRLR'; задействован ранее мёртвый famOfChild. Удалён мёртвый тёмный блок :root (перекрывался светлой палитрой). Убран неподключаемый шрифт Inter. server.js: Cache-Control: no-store для всех ответов API; parseCookies больше не падает на битой процентной последовательности в cookie. Удалён дубль конфига amvera.yaml (остался amvera.yml).
+- **What changed:** index.html: GEDCOM-экспорт переписан — убрана регулярка, которая съедала маркеры '0 @I…@ INDI' и '0 @F…@ FAM' и ломала файл; дата теперь в формате GEDCOM '12 MAY 1950' вместо числового месяца; добавлены ссылки '1 FAMC' от ребёнка к семье и завершающий '0 TRLR'; задействован ранее мёртвый famOfChild. Удалён мёртвый тёмный блок :root (перекрывался светлой палитрой). Убран неподключаемый шрифт Inter. server.js: Cache-Control: no-store для всех ответов API; parseCookies больше не падает на битой процентной последовательности в cookie. Удалён дубль конфига amvera.yaml (остался amvera.yml).
+- **What needs verification:** npm test — 8/8. node --check server.js и инлайн-скрипта — OK. GEDCOM проверен дважды: вырезанный из index.html фрагмент выполнен в Node с заглушками (10/10 проверок PASS) и реальный клик по кнопке в Chromium (10 записей INDI, завершение 0 TRLR, маркеры целы, консоль чистая). Сервер: /api/* → Cache-Control: no-store, ассеты → public max-age=86400, битая cookie %zz → 401 (не 500). Chromium: фон body остался #eee8d8, регрессий вида нет.
+- **Next logical step:** Коммит итерации 2.
+- **Important warnings:** Кэш API теперь no-store — при частом опросе /api/rev трафик чуть выше, но ответы маленькие. Оставлено намеренно: мёртвые тёмные правила (~130 строк) кроме :root, korni.service User=%i (README-HOME документирует замену через sed), узел брака в дереве, O(n²) на больших древах.
+- **Affected files:** index.html, server.js, amvera.yaml (удалён)
+- **Git status:** M .workbuddy-ai/memory/2026-10-11.md
+ M Dockerfile
+ M PROJECT_STATE.md
+ M TODO.md
+D  amvera.yaml
+ M index.html
+ M memory/.project-memory.json
+ M memory/CURRENT_CONTEXT.md
+ M package.json
+ M server.js
+?? memory/sessions/2026-10-11_18-10_2.md

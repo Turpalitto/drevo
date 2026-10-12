@@ -5,11 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Корни — семейный архив</title>
 <style>
-:root{
-  --bg:#101b17;--panel:#16231d;--card:#203328;
-  --line:#34483b;--text:#f3f0e6;--muted:#aebbae;
-  --gold:#dec28b;--dark:#142119;
-}
+/* Палитра задаётся ниже, в блоке «Editorial archive theme». */
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,sans-serif}
@@ -155,7 +151,7 @@ dialog::backdrop{background:#06110ab8;backdrop-filter:blur(5px)}
   --line:#c9bea5;--text:#17271f;--muted:#6d6a60;
   --gold:#a98542;--dark:#10251c;
 }
-body{background:#eee8d8;color:var(--text);font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+body{background:#eee8d8;color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 header{height:72px;padding:0 28px;background:#10251c;color:#f7f1e4;border-bottom:1px solid #6f654f;box-shadow:0 8px 30px #10251c17;position:relative;z-index:20}
 .brand{font:700 37px/1 Georgia,"Times New Roman",serif;letter-spacing:-1.4px}.brand span{color:#c9a65c}
 .header-note{color:#d2c9b8;font-family:Georgia,"Times New Roman",serif;font-size:13px}
@@ -173,14 +169,16 @@ input:focus,select:focus,textarea:focus{border-color:#9b7b3b}
 .switch{border-color:#c9bea5;border-radius:8px;background:#ede5d3}.switch button{color:#5f5d56;border-radius:6px;box-shadow:none}.switch button.active{background:#17382b;color:#fffaf0}
 .stats{border-color:#c9bea5}.stats strong{font-family:Georgia,"Times New Roman",serif;color:#17382b}.stats span{color:#716d62}
 .aside-bottom{background:#e9e0cc;border:1px solid #d2c7af}
+#addButton{position:sticky;bottom:12px;z-index:3;box-shadow:0 6px 18px #10251c2e}
 main{background:#f3eee1 url("assets/archive-paper.jpg") center/cover;transition:margin-right .24s ease}
 .main-top{padding:25px 30px 20px;border-bottom:1px solid #d4cab4;background:#f6f1e6cc;backdrop-filter:blur(8px);position:relative;z-index:5}
 .main-top h2{font-size:35px;margin:5px 0 0;color:#16271f}.archive-name{color:#777064}
-.view-toggle{border:1px solid #c9bea5;border-radius:8px;padding:3px}.view-toggle button{border:0;box-shadow:none}.view-toggle button.active{background:#17382b;color:#fffaf0}
+.view-toggle{border:1px solid #c9bea5;border-radius:8px;padding:4px}.view-toggle button{border:0;box-shadow:none}.view-toggle button.active{background:#17382b;color:#fffaf0}
 .focus-badge{background:#eee4cf;border-color:#b99c62;color:#4d463a;border-radius:8px}.focus-badge button{background:#f8f2e6}
 .stage{background:#f5f0e5aa}.stage:after{color:#8f816a66!important}
+.stage:has(#listView:not([hidden])):after{display:none}
 svg{cursor:grab}
-.edge{stroke:#8d8069;stroke-width:1.5;opacity:.62}.edge.mother{stroke:#a68e69}.edge.spouse{stroke:#9b7b3b;opacity:.68}
+.edge{stroke:#7f8577;stroke-width:1.8;opacity:.66}.edge.mother{stroke:#b0895a}.edge.spouse{stroke:#9b7b3b;opacity:.72}
 .edge.lineage{stroke:#9b752d;stroke-width:3.2;filter:drop-shadow(0 1px 1px #af874b66)}.edge.mother.lineage{stroke:#b08b55}
 .tree-has-lineage .edge:not(.lineage){opacity:.14}
 .node rect{fill:#faf6eb;stroke:#b9aa8c;stroke-width:1.2;filter:drop-shadow(0 4px 8px #5b4e3417)}
@@ -192,7 +190,7 @@ svg{cursor:grab}
 .node .collapse-btn rect{fill:#c6a35d;stroke:#9d7a35;filter:none}.node .collapse-btn text{fill:#183026}
 .generation-label{fill:#675d4d;font-family:Georgia,"Times New Roman",serif;font-size:13px;letter-spacing:1.7px}.generation-sub{fill:#847866;font-family:Georgia,"Times New Roman",serif;font-size:12px;font-style:italic}.generation-rule{stroke:#cfc5af;stroke-width:1}
 .tree-has-lineage .node:not(.lineage){opacity:.22}
-.bottom-bar{padding:13px 24px;border-color:#c9bea5;background:#eee6d5}.legend{color:#666258}.legend i{border-color:#8d8069}.legend i.dashed{border-color:#a68e69}.legend i.gold{border-color:#9b7b3b}
+.bottom-bar{padding:13px 24px;border-color:#c9bea5;background:#eee6d5}.legend{color:#666258}.legend i{border-color:#7f8577}.legend i.dashed{border-color:#b0895a}.legend i.gold{border-color:#9b7b3b}
 .controls button{background:#f8f3e7}
 .list-table th{color:#725c31;background:#eee7d7}.list-table th,.list-table td{border-color:#d3c9b4}.list-table tr:hover td{background:#eee5d2}
 dialog{background:#f6f1e5 url("assets/archive-paper.jpg") center/cover;color:#213027;border-color:#bfae8d;border-radius:10px;box-shadow:0 28px 80px #23312835}
@@ -205,15 +203,18 @@ dialog::backdrop{background:#12261c70;backdrop-filter:blur(2px)}
 .quick-add-row{display:flex;gap:6px;flex-wrap:wrap;padding:14px 0 4px;border-top:1px solid #c9bea5;margin-top:16px}
 .quick-add-row button{min-height:38px;font-size:12px;padding:7px 11px}
 .spouse-list{border-color:#c9bea5;background:#faf6eb}.spouse-list label{color:#213027}
-.notice{background:#eee3cc;border-color:#c4a66c;color:#514a3e}.activity{color:#6d685d}.activity p{border-color:#d1c7b2}.danger{color:#a33f32}
+.notice{background:#eee3cc;border-color:#c4a66c;color:#514a3e}.activity{color:#6d685d}.activity p{border-color:#d1c7b2}.danger{color:#9c3427;border-color:#c9a196;background:#f6e9e4}.danger:hover{background:#f1ddd5;border-color:#a9523f}
 .toast{background:#17382b;color:#fff8ea;border-radius:8px}
 @media(min-width:1440px){body.drawer-open main{margin-right:390px}.drawer-open .main-top{padding-right:22px}.drawer-open .archive-name{display:none}}
 @media(min-width:761px){
  body.sidebar-collapsed .layout{grid-template-columns:0 1fr}
  body.sidebar-collapsed aside{opacity:0;transform:translateX(-24px);padding-left:0;padding-right:0;border-right:0;pointer-events:none}
 }
+/* Промежуточные ширины: шапка не должна переноситься и переполнять 72px. */
+@media(max-width:1040px){.header-note{display:none}}
+@media(max-width:880px){.local{display:none}}
 @media(max-width:760px){
- header{height:70px;background:#10251c}.layout{height:auto}.brand{font-size:29px}#sidebarToggle{display:none}
+ header{height:70px;background:#10251c}.layout{height:auto;display:flex;flex-direction:column}main{order:-1}.brand{font-size:29px}#sidebarToggle{display:none}
  aside{padding:20px;background-color:#f4efe2}main{background-color:#f3eee1}.main-top{padding:18px 16px}.main-top h2{font-size:27px}
  h1{font-size:34px;line-height:1.04;margin:14px 0}h1 br{display:block}
  #personDialog{width:min(620px,calc(100% - 24px));height:auto;max-height:90dvh;border:1px solid #bfae8d;border-radius:10px;padding:21px}
@@ -678,9 +679,6 @@ function years(p){
   if(b&&d)return `${b} — ${d}`;
   if(b)return `род. ${b}`;
   if(d)return `ум. ${d}`;
-  if(p.birth&&p.death)return `${p.birth} — ${p.death}`;
-  if(p.birth)return `род. ${p.birth}`;
-  if(p.death)return `ум. ${p.death}`;
   return "Годы не указаны";
 }
 function slug(s){return (s||"korni").toLowerCase().replace(/[^a-zа-я0-9]+/gi,"-").replace(/^-+|-+$/g,"").slice(0,40)||"korni"}
@@ -773,24 +771,6 @@ function kinshipLabel(aId,bId){
   const sharedChild=data.people.some(p=>(p.father===aId||p.mother===aId)&&(p.father===bId||p.mother===bId));
   if(sharedChild)return "совместный родитель детей";
   return null;
-}
-function renderRelationshipTool(){
-  const aSel=$("#relationA"),bSel=$("#relationB"),oldA=aSel.value,oldB=bSel.value;
-  const sorted=[...data.people].sort((a,b)=>a.name.localeCompare(b.name,"ru"));
-  for(const select of [aSel,bSel]){select.replaceChildren(new Option("Выберите…",""));for(const p of sorted)select.add(new Option(`${p.name} · ${p.birth||p.birthFull||"—"}`,p.id))}
-  if(sorted.some(p=>String(p.id)===oldA))aSel.value=oldA;if(sorted.some(p=>String(p.id)===oldB))bSel.value=oldB;
-  updateRelationship();
-}
-function updateRelationship(){
-  const aId=Number($("#relationA").value),bId=Number($("#relationB").value),box=$("#relationResult");
-  if(!aId||!bId){box.textContent="Выберите двух людей — покажем степень и путь родства.";return}
-  if(aId===bId){box.innerHTML="<strong>Это один и тот же человек</strong>Выберите разные записи.";return}
-  const map=new Map(data.people.map(p=>[p.id,p])),a=map.get(aId),b=map.get(bId),label=kinshipLabel(aId,bId),path=familyPath(aId,bId,true);
-  if(!path){box.innerHTML="<strong>Связь не найдена</strong>В архиве пока нет цепочки между этими людьми.";return}
-  const names=path.map(id=>map.get(id)?.name||"?").join(" → "),degree=Math.max(0,path.length-1);
-  box.replaceChildren();const strong=document.createElement("strong");strong.textContent=label?`${b.name} — ${label} для ${a.name}`:`${a.name} и ${b.name}: семейная связь`;
-  const meta=document.createElement("div");meta.textContent=`${label&&label!=="муж"&&label!=="жена"&&label!=="совместный родитель детей"?"Кровное родство":"Связь по семье"} · ${degree} ${degree===1?"шаг":"шага"}`;
-  const route=document.createElement("div");route.className="relationship-path";route.textContent=names;box.append(strong,meta,route);
 }
 function hiddenByCollapse(){
   const hidden=new Set();
@@ -929,9 +909,11 @@ function renderTree(){
     else node.append(el("text",{x:35,y:42,"text-anchor":"middle",class:"initial"},Array.from(p.name)[0]||""));
     node.append(
       el("text",{x:69,y:31,class:"name"},short(p.name,20)),
-      el("text",{x:69,y:51,class:"date"},short(years(p),26)),
-      el("text",{x:17,y:87,class:"tag"},short((p.birthPlace&&`род. ${p.birthPlace}`)||(p.teip&&`Тейп: ${p.teip}`)||p.info||p.native||"Место рождения не указано",34))
+      el("text",{x:69,y:51,class:"date"},short(years(p),26))
     );
+    // Подпись показываем только когда есть что показать — без повторяющейся заглушки.
+    const tag=(p.birthPlace&&`род. ${p.birthPlace}`)||(p.teip&&`Тейп: ${p.teip}`)||p.info||p.native||"";
+    if(tag)node.append(el("text",{x:17,y:87,class:"tag"},short(tag,34)));
     const kids=childrenOf(p.id).filter(id=>ids.has(id));
     if(kids.length){
       const g=el("g",{class:"collapse-btn",transform:`translate(${NODE_W-26} -12)`});
@@ -1272,29 +1254,26 @@ function applyQuickAddDefaults(){
   const base=data.people.find(x=>x.id===parentHint.baseId);if(!base){quickAddRelation=null;return}
   const f=form;
   if(quickAddRelation==="father"||quickAddRelation==="mother"){
-    // Добавляем родителя текущего человека: этот человек — ребёнок нового.
-    const childKey=quickAddRelation==="father"?"father":"mother";
-    if(base.sex==="M")f.elements.father.value=String(base.id);
-    else if(base.sex==="F")f.elements.mother.value=String(base.id);
-    // Пол нового родителя задаётся самой кнопкой.
+    // Добавляем родителя текущего человека: новый человек станет отцом/матерью base.
+    // Связь проставится при сохранении (см. form.onsubmit), а не через поля формы.
     f.elements.sex.value=quickAddRelation==="father"?"M":"F";
-    // Ориентировочный год рождения: минимум за 14 лет до рождения ребёнка (закрыто проверкой изгиба).
+    f.dataset.linkParentOf=String(base.id);
+    // Ориентировочный год рождения: примерно на 25 лет раньше ребёнка.
     if(base.birth&&!f.elements.birth.value)f.elements.birth.value=Math.max(1,base.birth-25);
   } else if(quickAddRelation==="son"||quickAddRelation==="daughter"){
     f.elements.sex.value=quickAddRelation==="son"?"M":"F";
-    // Используем боковое родство: этот человек — родитель нового ребёнка.
+    // Новый человек — ребёнок base: base прописываем родителем нового.
     if(base.sex==="M")f.elements.father.value=String(base.id);
     else if(base.sex==="F")f.elements.mother.value=String(base.id);
-    // Если у родителя нет пола — подставим, что выберет пользователь.
     if(base.birth&&!f.elements.birth.value)f.elements.birth.value=base.birth+25;
   } else if(quickAddRelation==="spouse"){
     if(base.birth&&!f.elements.birth.value)f.elements.birth.value=base.birth;
     f.dataset.linkSpouseTo=String(base.id);
   }
-  quickAddRelation=null;
+  // Намерение храним до сохранения: сбрасывается в form.onsubmit и при закрытии диалога.
   setTimeout(()=>f.elements.name.focus(),60);
 }
-$("#addButton").onclick=()=>{quickAddRelation=null;parentHint=null;delete form.dataset.linkSpouseTo;openPerson()};
+$("#addButton").onclick=()=>{quickAddRelation=null;parentHint=null;delete form.dataset.linkSpouseTo;delete form.dataset.linkParentOf;openPerson()};
 $("#quickSonButton").onclick=()=>startQuickAdd(editing,"son");
 $("#quickDaughterButton").onclick=()=>startQuickAdd(editing,"daughter");
 $("#quickFatherButton").onclick=()=>startQuickAdd(editing,"father");
@@ -1319,7 +1298,7 @@ $("#sidebarToggle").onclick=()=>setSidebarCollapsed(!document.body.classList.con
 matchMedia("(max-width:760px)").addEventListener("change",syncSidebarA11y);
 try{setSidebarCollapsed(localStorage.getItem("korni-sidebar-collapsed")==="1",false)}catch(e){}
 $("#closePerson").onclick=()=>$("#personDialog").close();
-$("#personDialog").addEventListener("close",()=>{editing=null;quickAddRelation=null;parentHint=null;delete form.dataset.linkSpouseTo;document.body.classList.remove("drawer-open");markSelected(null);applyPendingUpdate();if(view==="tree"){requestAnimationFrame(()=>fitTree(highlightId));setTimeout(()=>fitTree(highlightId),280)}});
+$("#personDialog").addEventListener("close",()=>{editing=null;quickAddRelation=null;parentHint=null;delete form.dataset.linkSpouseTo;delete form.dataset.linkParentOf;document.body.classList.remove("drawer-open");markSelected(null);applyPendingUpdate();if(view==="tree"){requestAnimationFrame(()=>fitTree(highlightId));setTimeout(()=>fitTree(highlightId),280)}});
 $("#editPersonButton").onclick=()=>{$("#profileOverview").hidden=true;form.hidden=false;form.elements.name.focus()};
 function showFocusedBranch(){if(editing!=null){focusId=editing;collapsed.clear();$("#personDialog").close();setView("tree");render(true);notify("Показана ветка человека.")}}
 $("#focusButton").onclick=showFocusedBranch;
@@ -1347,6 +1326,7 @@ function downscalePhoto(file){
 form.onsubmit=e=>{
   e.preventDefault();
   if(stale){$("#formError").textContent="Архив изменён в другой вкладке. Перезагрузите страницу перед сохранением.";return}
+  const quickKind=quickAddRelation,quickBaseId=parentHint?parentHint.baseId:null;
   const isNew=editing==null||!data.people.some(x=>x.id===editing);
   const id=isNew?Math.max(0,...data.people.map(x=>x.id))+1:editing;
   const p=migrate({id});
@@ -1358,11 +1338,18 @@ form.onsubmit=e=>{
   if(p.deathFull&&!p.death)p.death=Number(p.deathFull.slice(0,4));
   if(removePhotoFlag)p.photo="";else if(pendingPhoto)p.photo=pendingPhoto;else if(!isNew){const old=data.people.find(x=>x.id===id);p.photo=old?old.photo:""}
   const checked=[...$("#spouseList").querySelectorAll("input:checked")].map(cb=>Number(cb.value));
-  if(quickAddRelation==="spouse"&&parentHint){const sid=Number(form.dataset.linkSpouseTo);if(sid&&!checked.includes(sid))checked.push(sid);quickAddRelation=null;parentHint=null;form.dataset.linkSpouseTo="";}
+  if(quickKind==="spouse"&&quickBaseId!=null){const sid=Number(form.dataset.linkSpouseTo);if(sid&&!checked.includes(sid))checked.push(sid)}
   p.spouses=checked;
   try{
     const next=copy(),index=next.people.findIndex(x=>x.id===id);
     if(index<0)next.people.push(p);else next.people[index]=p;
+    // Быстрые кнопки «＋ Отец»/«＋ Мать»: новый человек становится родителем base.
+    if((quickKind==="father"||quickKind==="mother")&&quickBaseId!=null){
+      const base=next.people.find(x=>x.id===quickBaseId),key=quickKind==="father"?"father":"mother";
+      if(!base){$("#formError").textContent="Человек, к которому добавляли родителя, больше не найден.";return}
+      if(base[key]!==null){$("#formError").textContent="У этого человека уже указан "+(key==="father"?"отец":"мать")+". Измените связь в его карточке.";return}
+      base[key]=id;
+    }
     for(const person of next.people){
       if(person.id===id)continue;
       const has=person.spouses.includes(id),want=checked.includes(person.id);
@@ -1410,18 +1397,18 @@ $("#titleForm").onsubmit=e=>{
 const today=()=>new Date().toISOString().slice(0,10);
 $("#exportButton").onclick=()=>{download(`korni-${slug(data.title)}-${today()}.json`,JSON.stringify(data,null,2),"application/json")};
 function gedcomEscape(s){return (s||"").replace(/@/g,"(at)")};
+const GEDCOM_MONTHS=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+// GEDCOM 5.5 понимает только «12 MAY 1990»: числовой месяц часть программ не читает.
+function gedcomDate(iso){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||"");
+  if(!m)return "";
+  const month=Number(m[2]);
+  if(!(month>=1&&month<=12))return "";
+  return `${Number(m[3])} ${GEDCOM_MONTHS[month-1]} ${m[1]}`;
+}
 $("#exportGedcom").onclick=()=>{
   const lines=["0 HEAD","1 SOUR KORNI","1 GEDC","2 VERS 5.5","2 FORM LINEAGE-LINKED","1 CHAR UTF-8"];
-  for(const p of data.people){
-    lines.push(`0 @I${p.id}@ INDI`);
-    lines.push(`1 NAME ${gedcomEscape(p.name)}`);
-    lines.push(`1 SEX ${p.sex==="M"?"M":p.sex==="F"?"F":"U"}`);
-    if(p.birth||p.birthFull||p.birthPlace){lines.push("1 BIRT");if(p.birthFull)lines.push(`2 DATE ${p.birthFull.split("-").reverse().join(" ")}`);else if(p.birth)lines.push(`2 DATE ${p.birth}`);if(p.birthPlace)lines.push(`2 PLAC ${gedcomEscape(p.birthPlace)}`)}
-    if(p.death||p.deathFull||p.deathPlace){lines.push("1 DEAT");if(p.deathFull)lines.push(`2 DATE ${p.deathFull.split("-").reverse().join(" ")}`);else if(p.death)lines.push(`2 DATE ${p.death}`);if(p.deathPlace)lines.push(`2 PLAC ${gedcomEscape(p.deathPlace)}`)}
-    if(p.teip)lines.push(`1 NOTE Тейп: ${gedcomEscape(p.teip)}`);
-    if(p.info)lines.push(`1 NOTE ${gedcomEscape(p.info.slice(0,80))}`);
-    if(p.notes)lines.push(`1 NOTE ${gedcomEscape(p.notes.slice(0,200))}`);
-  }
+  // Семьи: сперва пары с общими детьми, затем супружеские пары без детей.
   const fams=new Map();
   for(const p of data.people){
     if(p.father==null&&p.mother==null)continue;
@@ -1443,16 +1430,29 @@ $("#exportGedcom").onclick=()=>{
       fams.set("s"+k1,{husb:a,wife:b,chil:[]});
     }
   }
-  let fi=1;const famOfChild=new Map();
-  for(const [key,f] of fams){
-    const fid=`@F${fi++}@`;
-    lines.push(`0 ${fid} FAM`);
+  // Номера семей нужны и в INDI (1 FAMC), и в записях FAM, поэтому считаем их заранее.
+  const famKeys=[...fams.keys()],famOfChild=new Map();
+  famKeys.forEach((key,index)=>{for(const child of fams.get(key).chil)famOfChild.set(child,`@F${index+1}@`)});
+  for(const p of data.people){
+    lines.push(`0 @I${p.id}@ INDI`);
+    lines.push(`1 NAME ${gedcomEscape(p.name)}`);
+    lines.push(`1 SEX ${p.sex==="M"?"M":p.sex==="F"?"F":"U"}`);
+    const famc=famOfChild.get(p.id);if(famc)lines.push(`1 FAMC ${famc}`);
+    if(p.birth||p.birthFull||p.birthPlace){lines.push("1 BIRT");const d=gedcomDate(p.birthFull)||(p.birth?String(p.birth):"");if(d)lines.push(`2 DATE ${d}`);if(p.birthPlace)lines.push(`2 PLAC ${gedcomEscape(p.birthPlace)}`)}
+    if(p.death||p.deathFull||p.deathPlace){lines.push("1 DEAT");const d=gedcomDate(p.deathFull)||(p.death?String(p.death):"");if(d)lines.push(`2 DATE ${d}`);if(p.deathPlace)lines.push(`2 PLAC ${gedcomEscape(p.deathPlace)}`)}
+    if(p.teip)lines.push(`1 NOTE Тейп: ${gedcomEscape(p.teip)}`);
+    if(p.info)lines.push(`1 NOTE ${gedcomEscape(p.info.slice(0,80))}`);
+    if(p.notes)lines.push(`1 NOTE ${gedcomEscape(p.notes.slice(0,200))}`);
+  }
+  famKeys.forEach((key,index)=>{
+    const f=fams.get(key);
+    lines.push(`0 @F${index+1}@ FAM`);
     if(f.husb)lines.push(`1 HUSB @I${f.husb}@`);
     if(f.wife)lines.push(`1 WIFE @I${f.wife}@`);
-    for(const c of f.chil){lines.push(`1 CHIL @I${c}@`);famOfChild.set(c,fid)}
-  }
-  const result=lines.join("\n").replace(/(@I\d+@ INDI[\s\S]*?)(0 @I|0 @F|$)/g,(m,indi)=>indi);
-  download(`korni-${slug(data.title)}-${today()}.ged`,result,"text/plain");
+    for(const c of f.chil)lines.push(`1 CHIL @I${c}@`);
+  });
+  lines.push("0 TRLR");
+  download(`korni-${slug(data.title)}-${today()}.ged`,lines.join("\n"),"text/plain");
   notify("GEDCOM сохранён вместе с супружескими парами.");
 };
 function csvCell(v){v=v==null?"":String(v);return /[",\n;]/.test(v)?`"${v.replace(/"/g,'""')}"`:v}
