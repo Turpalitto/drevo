@@ -1,21 +1,17 @@
 # Current Context
 
 <!-- PROJECT-MEMORY-KIT:AUTOMATIC -->
-- **Current focus:** Итерация 2 (продолжение): исправление GEDCOM-экспорта, кэш API, устойчивость cookie, чистка конфигов
-- **Last completed step:** index.html: GEDCOM-экспорт переписан — убрана регулярка, которая съедала маркеры '0 @I…@ INDI' и '0 @F…@ FAM' и ломала файл; дата теперь в формате GEDCOM '12 MAY 1950' вместо числового месяца; добавлены ссылки '1 FAMC' от ребёнка к семье и завершающий '0 TRLR'; задействован ранее мёртвый famOfChild. Удалён мёртвый тёмный блок :root (перекрывался светлой палитрой). Убран неподключаемый шрифт Inter. server.js: Cache-Control: no-store для всех ответов API; parseCookies больше не падает на битой процентной последовательности в cookie. Удалён дубль конфига amvera.yaml (остался amvera.yml).
-- **What changed:** index.html: GEDCOM-экспорт переписан — убрана регулярка, которая съедала маркеры '0 @I…@ INDI' и '0 @F…@ FAM' и ломала файл; дата теперь в формате GEDCOM '12 MAY 1950' вместо числового месяца; добавлены ссылки '1 FAMC' от ребёнка к семье и завершающий '0 TRLR'; задействован ранее мёртвый famOfChild. Удалён мёртвый тёмный блок :root (перекрывался светлой палитрой). Убран неподключаемый шрифт Inter. server.js: Cache-Control: no-store для всех ответов API; parseCookies больше не падает на битой процентной последовательности в cookie. Удалён дубль конфига amvera.yaml (остался amvera.yml).
-- **What needs verification:** npm test — 8/8. node --check server.js и инлайн-скрипта — OK. GEDCOM проверен дважды: вырезанный из index.html фрагмент выполнен в Node с заглушками (10/10 проверок PASS) и реальный клик по кнопке в Chromium (10 записей INDI, завершение 0 TRLR, маркеры целы, консоль чистая). Сервер: /api/* → Cache-Control: no-store, ассеты → public max-age=86400, битая cookie %zz → 401 (не 500). Chromium: фон body остался #eee8d8, регрессий вида нет.
-- **Next logical step:** Коммит итерации 2.
-- **Important warnings:** Кэш API теперь no-store — при частом опросе /api/rev трафик чуть выше, но ответы маленькие. Оставлено намеренно: мёртвые тёмные правила (~130 строк) кроме :root, korni.service User=%i (README-HOME документирует замену через sed), узел брака в дереве, O(n²) на больших древах.
-- **Affected files:** index.html, server.js, amvera.yaml (удалён)
-- **Git status:** M .workbuddy-ai/memory/2026-10-11.md
- M Dockerfile
+- **Current focus:** Итерация 3: перенос полезного из аналогов — приватность живых, scrypt, WAL/VACUUM INTO, сжатие+ETag, UID
+- **Last completed step:** server.js: (1) /api/contribution/context больше не отдаёт год рождения живых людей — функция isLiving() (нет смерти и год рождения позже текущий-110), добавлено поле living; (2) пароль хранится как scrypt-хеш с солью в kv.password_hash, hashPassword/verifyPassword/refreshPasswordHash, при смене KORNI_PASSWORD хеш пересчитывается; (3) PRAGMA journal_mode=WAL, synchronous=NORMAL, busy_timeout=5000; backupDaily пишет JSON и снимок korni-<дата>.db через VACUUM INTO, ротация по датам для обоих расширений; (4) предсжатие index.html (br q11/zstd/gzip) с согласованием Accept-Encoding, Vary, ETag и 304 для / и ассетов, кэш ассетов в памяти; (5) валидация uid, uid у людей из заявок. index.html: UID_RE/newUid/legacyUid/ensureUids, uid в модели и migrate, 1 UID в GEDCOM и чтение при импорте, колонка uid в CSV, подпись «жив» в гостевом списке. README.md: разделы про WAL, снимок .db, приватность живых и scrypt.
+- **What changed:** server.js: (1) /api/contribution/context больше не отдаёт год рождения живых людей — функция isLiving() (нет смерти и год рождения позже текущий-110), добавлено поле living; (2) пароль хранится как scrypt-хеш с солью в kv.password_hash, hashPassword/verifyPassword/refreshPasswordHash, при смене KORNI_PASSWORD хеш пересчитывается; (3) PRAGMA journal_mode=WAL, synchronous=NORMAL, busy_timeout=5000; backupDaily пишет JSON и снимок korni-<дата>.db через VACUUM INTO, ротация по датам для обоих расширений; (4) предсжатие index.html (br q11/zstd/gzip) с согласованием Accept-Encoding, Vary, ETag и 304 для / и ассетов, кэш ассетов в памяти; (5) валидация uid, uid у людей из заявок. index.html: UID_RE/newUid/legacyUid/ensureUids, uid в модели и migrate, 1 UID в GEDCOM и чтение при импорте, колонка uid в CSV, подпись «жив» в гостевом списке. README.md: разделы про WAL, снимок .db, приватность живых и scrypt.
+- **What needs verification:** npm test — 8/8. Сервер: 39/39 проверок (/tmp/verify_iter3.js) — br 122425→29920 байт и распаковка в исходник, zstd и gzip, ETag/304 для / и ассетов, обход каталога 404, scrypt в kv и отсутствие открытого пароля, journal_mode=wal и файл -wal, VACUUM INTO создаёт korni-<дата>.db с архивом внутри, живые без года, умершие с годом, uid сохраняется и отклоняется невалидный, перезапуск со сменой пароля. Клиент: 12/12 проверок в Chromium (/tmp/cdp_uid.js) — uid новым и старым записям, стабильность uid, 1 UID на человека в GEDCOM, круговорот экспорт→импорт, чтение UID, uid в CSV, консоль чистая. Регрессий нет: быстрые кнопки работают, вид не изменился.
+- **Next logical step:** Решить по оставшимся пунктам из analogs-2026-10.md: IndexedDB, миграции, источники/цитаты, PWA.
+- **Important warnings:** Приватность неполная по замыслу: имена живых остаются в списке, иначе гость не выберет родственника. Кэш ассетов в памяти не инвалидируется при замене файла на ходу. lastBackupDay хранится в памяти, поэтому после перезапуска снимок за сегодня не переснимается (VACUUM INTO не перезаписывает существующий файл).
+- **Affected files:** server.js, index.html, README.md, PROJECT_STATE.md
+- **Git status:** M .workbuddy-ai/memory/2026-10-12.md
  M PROJECT_STATE.md
- M TODO.md
-D  amvera.yaml
+ M README.md
  M index.html
  M memory/.project-memory.json
- M memory/CURRENT_CONTEXT.md
- M package.json
  M server.js
-?? memory/sessions/2026-10-11_18-10_2.md
+?? analogs-2026-10.md

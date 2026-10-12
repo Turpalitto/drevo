@@ -511,14 +511,42 @@ let undoStack=[];
 const pointers=new Map();
 let pinchDist=0;
 const NODE_W=244,NODE_H=108,NODE_CX=NODE_W/2,NODE_CY=NODE_H/2,COL_STEP=276,ROW_STEP=160,LABEL_W=145;
+// uid — стабильный идентификатор человека (GEDCOM 7 UID). Числовые id при импорте
+// пересчитываются, поэтому личность между выгрузками держится именно на uid.
+const UID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function newUid(){
+  // crypto.randomUUID требует защищённого контекста (https), а архив часто
+  // открывают по http в локальной сети — поэтому собираем UUID вручную.
+  const b=crypto.getRandomValues(new Uint8Array(16));
+  b[6]=(b[6]&0x0f)|0x40;b[8]=(b[8]&0x3f)|0x80;
+  const h=[...b].map(x=>x.toString(16).padStart(2,"0")).join("");
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+function hash32(text,seed){
+  let h=seed>>>0;
+  for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0}
+  return h>>>0;
+}
+// Старым записям без uid выводим его из id, имени и года: до первого сохранения
+// значение получается одинаковым при каждом открытии архива.
+function legacyUid(p){
+  const base=`korni|${p.id}|${p.name}|${p.birth??""}`;
+  const words=[hash32(base,0x811c9dc5),hash32(base,0x9e3779b9),hash32(base,0x85ebca6b),hash32(base,0xc2b2ae35)];
+  const hex=words.map(w=>w.toString(16).padStart(8,"0")).join("");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-4${hex.slice(13,16)}-a${hex.slice(17,20)}-${hex.slice(20,32)}`;
+}
+function ensureUids(archive){
+  for(const p of archive.people) if(!UID_RE.test(p.uid||"")) p.uid=legacyUid(p);
+  return archive;
+}
 function blankPerson(id){
-  return {id,name:"",native:"",sex:"U",teip:"",birth:null,death:null,father:null,mother:null,tukhum:"",notes:"",source:"",birthFull:"",deathFull:"",birthPlace:"",deathPlace:"",photo:"",info:"",spouses:[]};
+  return {id,uid:"",name:"",native:"",sex:"U",teip:"",birth:null,death:null,father:null,mother:null,tukhum:"",notes:"",source:"",birthFull:"",deathFull:"",birthPlace:"",deathPlace:"",photo:"",info:"",spouses:[]};
 }
 function person(id,name,sex,birth,father=null,mother=null){
   return {...blankPerson(id),name,sex,birth,father,mother,notes:"Демонстрационная запись. Человек вымышленный.",source:"Пример для знакомства с интерфейсом"};
 }
 function demo(){
-  return {format:"korni-local",version:1,rev:1,title:"История нашей семьи",demo:true,log:[],people:[
+  return ensureUids({format:"korni-local",version:1,rev:1,title:"История нашей семьи",demo:true,log:[],people:[
     person(1,"Ахмед","M",1930),
     person(2,"Аминат","F",1934),
     person(3,"Муса","M",1956,1,2),
@@ -529,11 +557,12 @@ function demo(){
     person(8,"Мадина","F",1984),
     person(9,"Адам","M",2008,6,8),
     person(10,"Амина","F",2012,6,8)
-  ]};
+  ]});
 }
 function migrate(p){
   const b=blankPerson(p.id);
   for(const k of allFields){ if(p[k]!==undefined) b[k]=p[k]; }
+  if(UID_RE.test(p.uid||""))b.uid=p.uid;
   if(!Array.isArray(p.spouses)) b.spouses=[];
   else b.spouses=p.spouses.filter(Number.isSafeInteger);
   return b;
@@ -555,6 +584,7 @@ function validatePeople(people){
       if(typeof p[key]!=="string"||p[key].length>10)throw Error("Некорректная дата (id "+p.id+").");
       if(p[key]&&!dateRe.test(p[key]))throw Error("Дата должна быть в формате ГГГГ-ММ-ДД (id "+p.id+").");
     }
+    if(p.uid!==undefined&&p.uid!==""&&!UID_RE.test(p.uid))throw Error("Некорректный идентификатор записи (id "+p.id+").");
     if(typeof p.photo!=="string"||p.photo.length>600000)throw Error("Фото слишком большое (id "+p.id+"). Удалите фото или выберите файл меньше.");
     if(p.photo&&!p.photo.startsWith("data:image/"))throw Error("Некорректное фото (id "+p.id+").");
     for(const key of ["birth","death"]){
@@ -596,7 +626,7 @@ function parseArchive(value){
   if(!value||value.format!=="korni-local"||value.version!==1)throw Error("Неизвестный формат архива.");
   if(typeof value.title!=="string"||!value.title.trim()||value.title.length>100)throw Error("Некорректное название.");
   if(!Array.isArray(value.people))throw Error("Нет списка людей.");
-  const people=value.people.map(migrate);
+  const people=ensureUids({people:value.people.map(migrate)}).people;
   validatePeople(people);
   return {
     format:"korni-local",version:1,rev:Number.isSafeInteger(value.rev)&&value.rev>0?value.rev:1,
@@ -656,6 +686,7 @@ document.addEventListener("keydown",e=>{
 function commit(next,text,opts={}){
   if(stale)throw Error("Архив изменён в другой вкладке. Перезагрузите страницу, чтобы не потерять данные.");
   if(opts.clearDemo!==false&&(text.startsWith("Добавлен")||text.startsWith("Изменён")||text.startsWith("Удалён")||text.startsWith("Архив")||text.startsWith("Импорт")))next.demo=false;
+  ensureUids(next);
   validatePeople(next.people);
   if(opts.pushUndo!==false)pushUndo(data);
   next.rev=myRev+1;
@@ -1095,7 +1126,8 @@ function openContributionForm(){
   const f=$("#contributionForm");f.reset();$("#contributionError").textContent="";f.hidden=false;$("#contributionSuccess").hidden=true;
   const people=[...contributionPeople].sort((a,b)=>a.name.localeCompare(b.name,"ru")),select=f.elements.relativeId,second=f.elements.secondParentId;
   select.replaceChildren(new Option("Выберите человека…",""));second.replaceChildren(new Option("Не указан",""));
-  for(const p of people){select.add(new Option(`${p.name} · ${p.birth||"—"}`,p.id));second.add(new Option(`${p.name} · ${p.birth||"—"}`,p.id))}
+  // У живых людей сервер не отдаёт год рождения — вместо него честная подпись.
+  for(const p of people){const tail=p.birth?String(p.birth):(p.living?"жив":"—");select.add(new Option(`${p.name} · ${tail}`,p.id));second.add(new Option(`${p.name} · ${tail}`,p.id))}
   f.elements.birth.max=new Date().getFullYear();
   updateContributionRelationFields();
   if(!$("#contributionDialog").open)$("#contributionDialog").showModal();
@@ -1334,6 +1366,9 @@ form.onsubmit=e=>{
     if(key==="photo")continue;
     const value=form.elements.namedItem(key).value.trim();p[key]=numeric.has(key)?value?Number(value):null:value;
   }
+  // uid сохраняем при правке записи и выдаём новый при создании.
+  const previous=isNew?null:data.people.find(x=>x.id===id);
+  p.uid=previous&&UID_RE.test(previous.uid||"")?previous.uid:newUid();
   if(p.birthFull&&!p.birth)p.birth=Number(p.birthFull.slice(0,4));
   if(p.deathFull&&!p.death)p.death=Number(p.deathFull.slice(0,4));
   if(removePhotoFlag)p.photo="";else if(pendingPhoto)p.photo=pendingPhoto;else if(!isNew){const old=data.people.find(x=>x.id===id);p.photo=old?old.photo:""}
@@ -1407,6 +1442,7 @@ function gedcomDate(iso){
   return `${Number(m[3])} ${GEDCOM_MONTHS[month-1]} ${m[1]}`;
 }
 $("#exportGedcom").onclick=()=>{
+  ensureUids(data);
   const lines=["0 HEAD","1 SOUR KORNI","1 GEDC","2 VERS 5.5","2 FORM LINEAGE-LINKED","1 CHAR UTF-8"];
   // Семьи: сперва пары с общими детьми, затем супружеские пары без детей.
   const fams=new Map();
@@ -1437,6 +1473,7 @@ $("#exportGedcom").onclick=()=>{
     lines.push(`0 @I${p.id}@ INDI`);
     lines.push(`1 NAME ${gedcomEscape(p.name)}`);
     lines.push(`1 SEX ${p.sex==="M"?"M":p.sex==="F"?"F":"U"}`);
+    if(p.uid)lines.push(`1 UID ${p.uid}`);
     const famc=famOfChild.get(p.id);if(famc)lines.push(`1 FAMC ${famc}`);
     if(p.birth||p.birthFull||p.birthPlace){lines.push("1 BIRT");const d=gedcomDate(p.birthFull)||(p.birth?String(p.birth):"");if(d)lines.push(`2 DATE ${d}`);if(p.birthPlace)lines.push(`2 PLAC ${gedcomEscape(p.birthPlace)}`)}
     if(p.death||p.deathFull||p.deathPlace){lines.push("1 DEAT");const d=gedcomDate(p.deathFull)||(p.death?String(p.death):"");if(d)lines.push(`2 DATE ${d}`);if(p.deathPlace)lines.push(`2 PLAC ${gedcomEscape(p.deathPlace)}`)}
@@ -1457,9 +1494,9 @@ $("#exportGedcom").onclick=()=>{
 };
 function csvCell(v){v=v==null?"":String(v);return /[",\n;]/.test(v)?`"${v.replace(/"/g,'""')}"`:v}
 $("#exportCsv").onclick=()=>{
-  const head=["id","name","native","sex","teip","tukhum","birth","death","birthPlace","deathPlace","father","mother","spouses","info","notes","source"];
+  const head=["id","name","native","sex","teip","tukhum","birth","death","birthPlace","deathPlace","father","mother","spouses","info","notes","source","uid"];
   const rows=[head.join(";")];
-  for(const p of data.people)rows.push([p.id,p.name,p.native,p.sex,p.teip,p.tukhum,p.birth||"",p.death||"",p.birthPlace,p.deathPlace,p.father||"",p.mother||"",p.spouses.join("|"),p.info||"",p.notes,p.source].map(csvCell).join(";"));
+  for(const p of data.people)rows.push([p.id,p.name,p.native,p.sex,p.teip,p.tukhum,p.birth||"",p.death||"",p.birthPlace,p.deathPlace,p.father||"",p.mother||"",p.spouses.join("|"),p.info||"",p.notes,p.source,p.uid||""].map(csvCell).join(";"));
   download(`korni-${slug(data.title)}-${today()}.csv`,"\uFEFF"+rows.join("\n"),"text/csv");
 };
 $("#importButton").onclick=()=>$("#importFile").click();
@@ -1501,7 +1538,7 @@ function parseGedcom(text){
     const [,lvl,xref,tag,rest]=m;
     if(lvl==="0"){
       cur=null;curFam=null;ctx=null;
-      if(xref&&tag==="INDI"){cur={id:xref,name:"",sex:"U",birth:null,death:null,birthPlace:"",deathPlace:"",teip:"",notes:"",source:"",fams:[]};indis.set(xref,cur)}
+      if(xref&&tag==="INDI"){cur={id:xref,uid:"",name:"",sex:"U",birth:null,death:null,birthPlace:"",deathPlace:"",teip:"",notes:"",source:"",fams:[]};indis.set(xref,cur)}
       else if(xref&&tag==="FAM"){curFam={husb:null,wife:null,chil:[]};fams.set(xref,curFam)}
     }else if(cur&&lvl==="1"){
       if(tag==="NAME")cur.name=(rest||"").replace(/\//g,"").trim()||"Без имени";
@@ -1509,6 +1546,7 @@ function parseGedcom(text){
       else if(tag==="NOTE"){const v=(rest||"").trim();if(v.startsWith("Тейп:"))cur.teip=v.slice(5).trim().slice(0,120);else cur.notes+=(cur.notes?"\n":"")+v}
       else if(tag==="SOUR")cur.source+=(cur.source?"\n":"")+(rest||"").trim();
       else if(tag==="BIRT"||tag==="DEAT")ctx=tag;
+      else if(tag==="UID")cur.uid=(rest||"").trim().toLowerCase().slice(0,36);
       else if(tag==="FAMC"){/* link via fam */}
       else ctx=null;
     }else if(curFam&&lvl==="1"){
@@ -1523,7 +1561,7 @@ function parseGedcom(text){
   if(!indis.size)throw Error("INDI-записи не найдены.");
   const x2id=new Map();let n=1;
   const people=[];
-  for(const [x,rec] of indis){x2id.set(x,n);people.push({...blankPerson(n),name:rec.name||"Без имени",sex:rec.sex,birth:rec.birth,death:rec.death,birthPlace:rec.birthPlace||"",deathPlace:rec.deathPlace||"",teip:rec.teip||"",notes:(rec.notes||"").slice(0,10000),source:(rec.source||"").slice(0,3000)});n++}
+  for(const [x,rec] of indis){x2id.set(x,n);people.push({...blankPerson(n),uid:UID_RE.test(rec.uid||"")?rec.uid:"",name:rec.name||"Без имени",sex:rec.sex,birth:rec.birth,death:rec.death,birthPlace:rec.birthPlace||"",deathPlace:rec.deathPlace||"",teip:rec.teip||"",notes:(rec.notes||"").slice(0,10000),source:(rec.source||"").slice(0,3000)});n++}
   for(const f of fams.values()){
     const hid=f.husb&&x2id.has(f.husb)?x2id.get(f.husb):null;
     const wid=f.wife&&x2id.has(f.wife)?x2id.get(f.wife):null;
@@ -1557,7 +1595,8 @@ $("#importCsvFile").onchange=async e=>{
       const cells=parseCsvLine(r);const o={};
       idx.forEach((h,i)=>o[h]=cells[i]||"");
       if(!o.name||!o.name.trim())continue;
-      people.push({...blankPerson(n++),name:o.name.trim().slice(0,180),native:(o.native||"").slice(0,180),sex:["M","F","U"].includes(o.sex)?o.sex:"U",teip:(o.teip||"").slice(0,120),tukhum:(o.tukhum||"").slice(0,120),birth:o.birth?Number(o.birth):null,death:o.death?Number(o.death):null,birthPlace:(o.birthPlace||"").slice(0,120),deathPlace:(o.deathPlace||"").slice(0,120),father:o.father?Number(o.father):null,mother:o.mother?Number(o.mother):null,spouses:o.spouses?o.spouses.split("|").map(Number).filter(Number.isSafeInteger):[],info:(o.info||"").slice(0,80),notes:(o.notes||"").slice(0,10000),source:(o.source||"").slice(0,3000)});
+      const csvUid=(o.uid||"").trim().toLowerCase();
+      people.push({...blankPerson(n++),uid:UID_RE.test(csvUid)?csvUid:"",name:o.name.trim().slice(0,180),native:(o.native||"").slice(0,180),sex:["M","F","U"].includes(o.sex)?o.sex:"U",teip:(o.teip||"").slice(0,120),tukhum:(o.tukhum||"").slice(0,120),birth:o.birth?Number(o.birth):null,death:o.death?Number(o.death):null,birthPlace:(o.birthPlace||"").slice(0,120),deathPlace:(o.deathPlace||"").slice(0,120),father:o.father?Number(o.father):null,mother:o.mother?Number(o.mother):null,spouses:o.spouses?o.spouses.split("|").map(Number).filter(Number.isSafeInteger):[],info:(o.info||"").slice(0,80),notes:(o.notes||"").slice(0,10000),source:(o.source||"").slice(0,3000)});
     }
     if(!people.length)throw Error("Строк с именами не найдено.");
     const ok=await ask(`Найдено строк: ${people.length}. Заменить текущий архив? Текущая копия сохранится для отката.`,"Импорт CSV");
@@ -1622,6 +1661,7 @@ $("#loginForm").onsubmit=async e=>{
 $("#logoutButton").onclick=async ()=>{try{await fetch("/api/logout",{method:"POST"})}catch(e){notify("Не удалось завершить сессию на сервере: нет связи. Перезагрузите страницу и повторите выход.")}location.reload()};
 async function pushToServer(next,forceBase){
   if(!serverMode)return false;
+  ensureUids(next);
   const baseRev=(forceBase!==undefined)?forceBase:next.rev-1;
   try{
     const r=await fetch("/api/archive",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({baseRev,archive:next})});

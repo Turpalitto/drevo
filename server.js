@@ -8,6 +8,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const zlib = require("node:zlib");
 const { DatabaseSync } = require("node:sqlite");
 
 const PORT = Number(process.env.PORT || 3000);
@@ -25,12 +26,27 @@ if (!PASSWORD) console.warn("ВНИМАНИЕ: сервер без пароля 
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const db = new DatabaseSync(path.join(DATA_DIR, "korni.db"));
+// WAL: читатели не блокируют писателя и наоборот. busy_timeout спасает от
+// мгновенного SQLITE_BUSY, если два процесса откроют базу одновременно.
+db.exec("PRAGMA journal_mode = WAL;");
+db.exec("PRAGMA synchronous = NORMAL;");
+db.exec("PRAGMA busy_timeout = 5000;");
 db.exec(`CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY, createdAt INTEGER);
 CREATE TABLE IF NOT EXISTS contributions(id TEXT PRIMARY KEY, createdAt INTEGER, status TEXT, payload TEXT);`);
 
 function freshArchive() {
   return { format: "korni-local", version: 1, rev: 1, title: "Моя родословная", demo: false, log: [], people: [] };
+}
+// Живым считаем человека без даты смерти, родившегося позже (текущий год − 110).
+// Если дат нет вовсе — тоже считаем живым: молчание не должно раскрывать данные.
+// Такой же подход по умолчанию в webtrees и Gramps Web.
+const LIVING_AGE_LIMIT = 110;
+function isLiving(p) {
+  if (p.death !== null && p.death !== undefined) return false;
+  if (typeof p.deathFull === "string" && p.deathFull.trim()) return false;
+  const year = new Date().getFullYear();
+  return !(p.birth && p.birth <= year - LIVING_AGE_LIMIT);
 }
 function getArchive() {
   const row = db.prepare("SELECT value FROM kv WHERE key='archive'").get();
@@ -52,6 +68,48 @@ function kvSet(key, value) {
 function kvDelete(key) {
   db.prepare("DELETE FROM kv WHERE key=?").run(key);
 }
+
+// --- пароль: scrypt с солью вместо голого SHA-256 ---
+// Прежняя схема сравнивала SHA-256 пароля: без соли и без вычислительной
+// стоимости перебор был слишком дешёвым. Теперь в kv лежит scrypt-хеш,
+// а переменная окружения остаётся источником истины: сменился KORNI_PASSWORD —
+// при следующем старте хеш пересчитывается автоматически.
+const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 };
+const PASSWORD_HASH_KEY = "password_hash";
+
+function scryptKey(password, salt, keylen, params) {
+  return crypto.scryptSync(password, salt, keylen, params);
+}
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16);
+  const key = scryptKey(password, salt, SCRYPT.keylen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p });
+  return `scrypt$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${salt.toString("base64")}$${key.toString("base64")}`;
+}
+function verifyPassword(password, stored) {
+  if (typeof password !== "string" || typeof stored !== "string") return false;
+  const parts = stored.split("$");
+  if (parts.length !== 6 || parts[0] !== "scrypt") return false;
+  const [, n, r, p, saltB64, keyB64] = parts;
+  let expected, actual;
+  try {
+    expected = Buffer.from(keyB64, "base64");
+    actual = scryptKey(password, Buffer.from(saltB64, "base64"), expected.length, { N: Number(n), r: Number(r), p: Number(p) });
+  } catch (e) {
+    return false;
+  }
+  return expected.length > 0 && expected.length === actual.length && crypto.timingSafeEqual(actual, expected);
+}
+
+let passwordHash = "";
+function refreshPasswordHash() {
+  if (!PASSWORD) { passwordHash = ""; return; }
+  const stored = kvGet(PASSWORD_HASH_KEY);
+  if (stored && verifyPassword(PASSWORD, stored)) { passwordHash = stored; return; }
+  passwordHash = hashPassword(PASSWORD);
+  kvSet(PASSWORD_HASH_KEY, passwordHash);
+}
+refreshPasswordHash();
+
 function setArchive(a) {
   db.prepare("INSERT INTO kv(key,value) VALUES('archive',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(a));
   backupDaily(a);
@@ -61,17 +119,35 @@ function setArchive(a) {
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 const KEEP_BACKUPS = 30;
 let lastBackupDay = "";
+function sqlQuote(value) {
+  return "'" + String(value).replace(/'/g, "''") + "'";
+}
 function backupDaily(archive) {
   if (!archive || !Array.isArray(archive.people) || archive.people.length === 0) return;
   try {
     const day = new Date().toISOString().slice(0, 10);
     if (day === lastBackupDay) return; // сегодня уже сохранили
     fs.mkdirSync(BACKUPS_DIR, { recursive: true });
-    const file = path.join(BACKUPS_DIR, `korni-${day}.json`);
-    fs.writeFileSync(file, JSON.stringify(archive, null, 2));
+    fs.writeFileSync(path.join(BACKUPS_DIR, `korni-${day}.json`), JSON.stringify(archive, null, 2));
+    // Плюс согласованный снимок всей базы (архив, сессии, заявки) одним файлом:
+    // VACUUM INTO безопаснее копирования файла на живой базе.
+    const dbFile = path.join(BACKUPS_DIR, `korni-${day}.db`);
+    if (!fs.existsSync(dbFile)) { // VACUUM INTO не перезаписывает существующий файл
+      try { db.exec(`VACUUM INTO ${sqlQuote(dbFile)}`); }
+      catch (e) { console.warn("Не удалось снять снимок базы:", e.message); }
+    }
     lastBackupDay = day;
-    const entries = fs.readdirSync(BACKUPS_DIR).filter((f) => f.startsWith("korni-") && f.endsWith(".json")).sort();
-    while (entries.length > KEEP_BACKUPS) { fs.unlinkSync(path.join(BACKUPS_DIR, entries.shift())); }
+    // Ротация по датам: у одного дня может быть и .json, и .db.
+    const days = [...new Set(fs.readdirSync(BACKUPS_DIR)
+      .filter((f) => /^korni-\d{4}-\d{2}-\d{2}\.(json|db)$/.test(f))
+      .map((f) => f.slice(6, 16)))].sort();
+    while (days.length > KEEP_BACKUPS) {
+      const old = days.shift();
+      for (const ext of ["json", "db"]) {
+        const file = path.join(BACKUPS_DIR, `korni-${old}.${ext}`);
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+      }
+    }
   } catch (e) {
     console.warn("Не удалось сделать ежедневную копию:", e.message);
   }
@@ -100,7 +176,7 @@ function checkContribution(v) {
 function personFromContribution(v, archive) {
   const id = Math.max(0, ...archive.people.map((p) => p.id)) + 1;
   const source = [`Предложено: ${v.submittedBy.trim()}`, v.contact.trim() && `Контакт: ${v.contact.trim()}`].filter(Boolean).join(" · ");
-  return { id, name: v.name.trim(), native: "", sex: v.sex, teip: "", birth: v.birth, death: null, father: null, mother: null, tukhum: "", notes: v.notes.trim(), source, birthFull: "", deathFull: "", birthPlace: v.birthPlace.trim(), deathPlace: "", photo: "", info: v.info.trim().slice(0, 80), spouses: [] };
+  return { id, uid: crypto.randomUUID(), name: v.name.trim(), native: "", sex: v.sex, teip: "", birth: v.birth, death: null, father: null, mother: null, tukhum: "", notes: v.notes.trim(), source, birthFull: "", deathFull: "", birthPlace: v.birthPlace.trim(), deathPlace: "", photo: "", info: v.info.trim().slice(0, 80), spouses: [] };
 }
 
 // --- validation (same rules as client) ---
@@ -115,6 +191,10 @@ function validatePeople(people) {
     if (!["M", "F", "U"].includes(p.sex)) throw Error("bad sex");
     for (const [key, max] of [["native", 180], ["teip", 120], ["tukhum", 120], ["notes", 10000], ["source", 3000], ["birthPlace", 120], ["deathPlace", 120], ["info", 80]]) {
       if (typeof p[key] !== "string" || p[key].length > max) throw Error("bad " + key);
+    }
+    // uid — необязательный стабильный идентификатор (GEDCOM 7 UID) в формате UUID.
+    if (p.uid !== undefined && p.uid !== null && p.uid !== "" && (typeof p.uid !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(p.uid))) {
+      throw Error("bad uid");
     }
     for (const key of ["birthFull", "deathFull"]) {
       if (typeof p[key] !== "string" || p[key].length > 10) throw Error("bad date");
@@ -254,6 +334,53 @@ const ASSET_TYPES = {
   ".gif": "image/gif", ".svg": "image/svg+xml", ".ico": "image/x-icon",
 };
 
+function etagOf(buf) {
+  return '"' + crypto.createHash("sha256").update(buf).digest("hex").slice(0, 20) + '"';
+}
+// Кодеки по предпочтению. Клиент получает только ту кодировку, которую сам
+// объявил в Accept-Encoding, поэтому отсутствующие в браузере варианты просто
+// не выбираются. Недоступные в сборке Node кодеки отсеиваются на старте.
+const CODECS = [
+  ["br", zlib.brotliCompressSync && ((buf) => zlib.brotliCompressSync(buf, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11 } }))],
+  ["zstd", zlib.zstdCompressSync && ((buf) => zlib.zstdCompressSync(buf))],
+  ["gzip", zlib.gzipSync && ((buf) => zlib.gzipSync(buf, { level: 9 }))],
+].filter(([, encode]) => typeof encode === "function");
+
+function buildVariants(buf) {
+  const out = [];
+  for (const [name, encode] of CODECS) {
+    try {
+      const body = encode(buf);
+      if (body && body.length < buf.length) out.push([name, body]);
+    } catch (e) { /* кодек недоступен — просто пропускаем */ }
+  }
+  return out;
+}
+function acceptsEncoding(header, name) {
+  return String(header || "").toLowerCase().split(",").some((part) => part.trim().split(";")[0] === name);
+}
+function pickVariant(variants, header) {
+  for (const variant of variants) if (acceptsEncoding(header, variant[0])) return variant;
+  return null;
+}
+
+const INDEX_ETAG = etagOf(INDEX);
+const INDEX_VARIANTS = buildVariants(INDEX);
+
+// Статику читаем с диска один раз: файлы в assets/ не меняются на ходу.
+const assetCache = new Map();
+function loadAsset(name) {
+  if (assetCache.has(name)) return assetCache.get(name);
+  const file = path.join(ASSETS_DIR, name);
+  let entry = null;
+  if (ASSET_RE.test(name) && fs.existsSync(file)) {
+    const buf = fs.readFileSync(file);
+    entry = { buf, etag: etagOf(buf), type: ASSET_TYPES[path.extname(name).toLowerCase()] || "application/octet-stream" };
+  }
+  assetCache.set(name, entry);
+  return entry;
+}
+
 function applySecurityHeaders(res) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "same-origin");
@@ -278,7 +405,22 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://x");
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
       applySecurityHeaders(res);
-      return send(res, 200, INDEX, "text/html");
+      if (req.headers["if-none-match"] === INDEX_ETAG) {
+        res.writeHead(304, { ETag: INDEX_ETAG, "Cache-Control": "no-cache" });
+        return res.end();
+      }
+      const variant = pickVariant(INDEX_VARIANTS, req.headers["accept-encoding"]);
+      const body = variant ? variant[1] : INDEX;
+      const headers = {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": body.length,
+        ETag: INDEX_ETAG,
+        "Cache-Control": "no-cache",
+        Vary: "Accept-Encoding",
+      };
+      if (variant) headers["Content-Encoding"] = variant[0];
+      res.writeHead(200, headers);
+      return res.end(body);
     }
     if (req.method === "GET" && url.pathname === "/healthz") {
       // Проверяем не только факт запуска, но и работоспособность БД (чтение/запись).
@@ -295,19 +437,33 @@ const server = http.createServer(async (req, res) => {
 
     // Статика: бумажная текстура и другие файлы из assets/ (без обхода каталога).
     if (req.method === "GET" && url.pathname.startsWith("/assets/")) {
-      const name = path.basename(url.pathname);
-      const file = path.join(ASSETS_DIR, name);
-      if (!ASSET_RE.test(name) || !fs.existsSync(file)) return sendJson(res, 404, { error: "not found" });
+      const asset = loadAsset(path.basename(url.pathname));
+      if (!asset) return sendJson(res, 404, { error: "not found" });
       applySecurityHeaders(res);
-      res.setHeader("Cache-Control", "public, max-age=86400");
-      return send(res, 200, fs.readFileSync(file), ASSET_TYPES[path.extname(name).toLowerCase()] || "application/octet-stream");
+      if (req.headers["if-none-match"] === asset.etag) {
+        res.writeHead(304, { ETag: asset.etag, "Cache-Control": "public, max-age=86400" });
+        return res.end();
+      }
+      res.writeHead(200, {
+        "Content-Type": asset.type,
+        "Content-Length": asset.buf.length,
+        ETag: asset.etag,
+        "Cache-Control": "public, max-age=86400",
+      });
+      return res.end(asset.buf);
     }
     if (req.method === "GET" && url.pathname === "/favicon.ico") return send(res, 204, "");
 
     if (url.pathname === "/api/contribution/context" && req.method === "GET") {
       if (!validContributionToken(url.searchParams.get("token"))) return sendJson(res, 403, { error: "Ссылка недействительна." });
       const archive = getArchive();
-      return sendJson(res, 200, { title: archive.title, people: archive.people.map((p) => ({ id: p.id, name: p.name, sex: p.sex, birth: p.birth })) });
+      // Гостевая ссылка отдаёт минимум: у живых людей год рождения не раскрываем,
+      // а имя оставляем — иначе родственник не сможет выбрать себя в списке.
+      const people = archive.people.map((p) => {
+        const living = isLiving(p);
+        return { id: p.id, name: p.name, sex: p.sex, living, birth: living ? null : p.birth };
+      });
+      return sendJson(res, 200, { title: archive.title, people });
     }
     if (url.pathname === "/api/contributions" && req.method === "POST") {
       if (!validContributionToken(url.searchParams.get("token"))) return sendJson(res, 403, { error: "Ссылка недействительна." });
@@ -326,7 +482,7 @@ const server = http.createServer(async (req, res) => {
       if (rateLimited(ip)) return sendJson(res, 429, { error: "Слишком много попыток. Подождите 5 минут." });
       let body = {};
       try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
-      if (!PASSWORD || !body.password || !sameHash(body.password, PASSWORD)) {
+      if (!passwordHash || !body.password || !verifyPassword(body.password, passwordHash)) {
         return sendJson(res, 401, { error: "Неверный пароль." });
       }
       const token = newSession();
