@@ -6,8 +6,11 @@ const assert = require("node:assert");
 const { spawn } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const path = require("node:path");
 const os = require("node:os");
+
+const hashToken = (t) => crypto.createHash("sha256").update(t).digest("hex");
 
 const PORT = 3178;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -393,7 +396,7 @@ test("К1: сессия старше 30 дней без активности в�
 
   // Состариваем сессию на 31 день в базе
   const db = new DatabaseSync(path.join(testDataDir, "korni.db"));
-  db.prepare("UPDATE sessions SET createdAt=? WHERE token=?").run(Date.now() - 31 * 24 * 3600 * 1000, sessionToken);
+  db.prepare("UPDATE sessions SET createdAt=? WHERE token=?").run(Date.now() - 31 * 24 * 3600 * 1000, hashToken(sessionToken));
   db.close();
 
   const meExpired = await call("/api/me", { cookie: cookieIdris });
@@ -416,7 +419,7 @@ test("К1: активная сессия продлевается со скол�
   // Прошло 25 часов с момента создания сессии
   const db = new DatabaseSync(path.join(testDataDir, "korni.db"));
   const agedTime = Date.now() - 25 * 3600 * 1000;
-  db.prepare("UPDATE sessions SET createdAt=? WHERE token=?").run(agedTime, sessionToken);
+  db.prepare("UPDATE sessions SET createdAt=? WHERE token=?").run(agedTime, hashToken(sessionToken));
   db.close();
 
   // Делаем запрос: сессия активна и должна продлиться
@@ -426,7 +429,7 @@ test("К1: активная сессия продлевается со скол�
   assert.ok(setCookie.includes("Max-Age="), "сервер выставил обновлённый cookie");
 
   const db2 = new DatabaseSync(path.join(testDataDir, "korni.db"));
-  const row = db2.prepare("SELECT createdAt FROM sessions WHERE token=?").get(sessionToken);
+  const row = db2.prepare("SELECT createdAt FROM sessions WHERE token=?").get(hashToken(sessionToken));
   db2.close();
   assert.ok(row.createdAt > agedTime, "время сессии в БД сдвинулось вперёд");
 });

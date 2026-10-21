@@ -74,6 +74,16 @@ function applyMigrations(targetDb) {
         d.exec("ALTER TABLE invites ADD COLUMN userId TEXT");
       }
     },
+    // v5: С6 — Хеширование токенов сессий (sha256), чтобы токены не хранились в открытом виде
+    (d) => {
+      const rows = d.prepare("SELECT token, createdAt, userId, role FROM sessions").all();
+      for (const row of rows) {
+        const hash = crypto.createHash("sha256").update(row.token).digest("hex");
+        d.prepare("DELETE FROM sessions WHERE token=?").run(row.token);
+        d.prepare("INSERT OR REPLACE INTO sessions(token, createdAt, userId, role) VALUES(?,?,?,?)")
+          .run(hash, row.createdAt, row.userId, row.role);
+      }
+    },
   ];
 
   for (let i = currentVersion; i < migrations.length; i++) {
@@ -592,26 +602,29 @@ function checkArchive(v) {
 }
 
 // --- sessions ---
-// Сессия помнит, кто вошёл и с какой ролью. Роль читается из users при каждом
-// запросе: отзыв доступа и смена роли действуют сразу, без перелогина.
+// Сессия помнит, кто вошёл и с какой ролью. Токены в базе хранятся в виде sha256-хеша.
+// Роль читается из users при каждом запросе: отзыв доступа и смена роли действуют сразу.
+const hashToken = (t) => crypto.createHash("sha256").update(String(t)).digest("hex");
 function newSession(user = { id: "owner", role: "keeper" }) {
   const token = crypto.randomBytes(32).toString("hex");
-  db.prepare("INSERT INTO sessions(token,createdAt,userId,role) VALUES(?,?,?,?)").run(token, Date.now(), user.id, user.role);
+  const hash = hashToken(token);
+  db.prepare("INSERT INTO sessions(token,createdAt,userId,role) VALUES(?,?,?,?)").run(hash, Date.now(), user.id, user.role);
   return token;
 }
 function sessionUser(req, res) {
   const token = parseCookies(req).korni_session;
   if (!token) return null;
-  const row = db.prepare("SELECT createdAt,userId,role FROM sessions WHERE token=?").get(token);
+  const hash = hashToken(token);
+  const row = db.prepare("SELECT createdAt,userId,role FROM sessions WHERE token=?").get(hash);
   if (!row) return null;
   const now = Date.now();
   if (now - row.createdAt > SESSION_TTL_MS) {
-    db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+    db.prepare("DELETE FROM sessions WHERE token=?").run(hash);
     return null;
   }
   // Скользящая сессия: продлеваем активную сессию и обновляем cookie, если прошло более 24 часов
   if (now - row.createdAt > 24 * 3600 * 1000) {
-    db.prepare("UPDATE sessions SET createdAt=? WHERE token=?").run(now, token);
+    db.prepare("UPDATE sessions SET createdAt=? WHERE token=?").run(now, hash);
     if (res && typeof res.setHeader === "function") {
       res.setHeader("Set-Cookie", sessionCookie(req, token));
     }
@@ -619,22 +632,23 @@ function sessionUser(req, res) {
   if (!row.userId || row.userId === "owner") return { id: "owner", name: "Хранитель", role: ownerRole(), token };
   const user = db.prepare("SELECT name,role,lastSeenAt,revokedAt FROM users WHERE id=?").get(row.userId);
   if (!user || user.revokedAt) {
-    db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+    db.prepare("DELETE FROM sessions WHERE token=?").run(hash);
     return null;
   }
   // Обновляем визит участника не чаще раза в час
   if (now - (user.lastSeenAt || 0) > 3600 * 1000) {
     db.prepare("UPDATE users SET lastSeenAt=? WHERE id=?").run(now, row.userId);
   }
-  if (user.role !== row.role) db.prepare("UPDATE sessions SET role=? WHERE token=?").run(user.role, token);
+  if (user.role !== row.role) db.prepare("UPDATE sessions SET role=? WHERE token=?").run(user.role, hash);
   return { id: row.userId, name: user.name, role: user.role, token };
 }
 function validSession(token) {
   if (!token) return false;
-  const row = db.prepare("SELECT createdAt FROM sessions WHERE token=?").get(token);
+  const hash = hashToken(token);
+  const row = db.prepare("SELECT createdAt FROM sessions WHERE token=?").get(hash);
   if (!row) return false;
   if (Date.now() - row.createdAt > SESSION_TTL_MS) {
-    db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+    db.prepare("DELETE FROM sessions WHERE token=?").run(hash);
     return false;
   }
   return true;
@@ -989,7 +1003,7 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === "/api/logout" && req.method === "POST") {
       const t = parseCookies(req).korni_session;
-      if (t) db.prepare("DELETE FROM sessions WHERE token=?").run(t);
+      if (t) db.prepare("DELETE FROM sessions WHERE token=?").run(hashToken(t));
       res.setHeader("Set-Cookie", "korni_session=; HttpOnly; Path=/; Max-Age=0");
       return sendJson(res, 200, { ok: true });
     }

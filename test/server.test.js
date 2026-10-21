@@ -616,6 +616,66 @@ test("С3: фото в истории заменяется на photoRef, отк
   assert.equal(restoredPerson.photo, samplePhoto, "фото сохранилось в неизменном виде");
 });
 
+test("С6: миграция v5 хеширует токены сессий в sha256, сессия до миграции продолжает работать", async () => {
+  const { DatabaseSync } = require("node:sqlite");
+  const crypto = require("node:crypto");
+  const migPort = 3180;
+  const migDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "korni-mig-"));
+  const dbPath = path.join(migDataDir, "korni.db");
+  const rawToken = "session-token-created-before-v5-migration-abc123xyz";
+
+  // 1. Создаём базу со схемой v4 и открытым токеном в таблице sessions
+  const preDb = new DatabaseSync(dbPath);
+  preDb.exec(`
+    CREATE TABLE kv(key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE sessions(token TEXT PRIMARY KEY, createdAt INTEGER, userId TEXT, role TEXT);
+    CREATE TABLE contributions(id TEXT PRIMARY KEY, createdAt INTEGER, status TEXT, payload TEXT);
+    CREATE TABLE users(id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, createdAt INTEGER NOT NULL, lastSeenAt INTEGER, revokedAt INTEGER);
+    CREATE TABLE invites(token_hash TEXT PRIMARY KEY, role TEXT NOT NULL, note TEXT, createdAt INTEGER NOT NULL, expiresAt INTEGER NOT NULL, usedAt INTEGER, createdBy TEXT, userId TEXT);
+    CREATE TABLE proposals(id TEXT PRIMARY KEY, createdAt INTEGER NOT NULL, authorId TEXT, authorName TEXT, summary TEXT, baseRev INTEGER, status TEXT NOT NULL, payload TEXT NOT NULL);
+    CREATE TABLE history(id INTEGER PRIMARY KEY AUTOINCREMENT, personId INTEGER NOT NULL, at INTEGER NOT NULL, authorId TEXT, authorName TEXT, action TEXT, before TEXT, after TEXT);
+    PRAGMA user_version = 4;
+  `);
+  preDb.prepare("INSERT INTO sessions(token, createdAt, userId, role) VALUES(?,?,?,?)").run(rawToken, Date.now(), "owner", "keeper");
+  preDb.close();
+
+  // 2. Запускаем сервер на этой базе данных. Он автоматически накатит миграцию v5.
+  const migServer = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
+    env: { ...process.env, KORNI_PASSWORD: PASSWORD, DATA_DIR: migDataDir, PORT: String(migPort) },
+    stdio: "pipe",
+  });
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(Error("миграционный сервер не запустился")), 5000);
+    migServer.stdout.on("data", (d) => {
+      if (String(d).includes("Корни: общая база")) { clearTimeout(timer); resolve(); }
+    });
+  });
+
+  try {
+    const migBase = `http://127.0.0.1:${migPort}`;
+    // 3. Отправляем запрос с прежней cookie korni_session=rawToken
+    const res = await fetch(migBase + "/api/me", {
+      headers: { Cookie: `korni_session=${rawToken}` },
+    });
+    assert.equal(res.status, 200, "сессия до миграции успешно авторизована");
+    const user = await res.json();
+    assert.equal(user.role, "keeper");
+
+    // 4. Проверяем в самой БД, что токен сохранён как sha256 хеш, а не в открытом виде
+    const postDb = new DatabaseSync(dbPath);
+    const version = postDb.prepare("PRAGMA user_version").get().user_version;
+    assert.equal(version, 5, "версия схемы базы повышена до 5");
+
+    const expectedHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const sessionRow = postDb.prepare("SELECT token FROM sessions").get();
+    assert.equal(sessionRow.token, expectedHash, "токен в базе захеширован sha256");
+    assert.notEqual(sessionRow.token, rawToken, "в базе нет открытого токена");
+    postDb.close();
+  } finally {
+    migServer.kill("SIGTERM");
+  }
+});
+
 test("выход из сессии", async () => {
   const res = await api("/api/logout", { method: "POST" });
   assert.equal(res.status, 200);
