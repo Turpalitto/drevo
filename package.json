@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "main": "server.js",
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
-    "start": "node server.js",
+    "start": "node --env-file-if-exists=.env server.js",
     "test": "node --test test/server.test.js test/access.test.js",
     "test:ui": "node test/ui/stage3.js && node test/ui/stage4.js && node test/ui/stage5.js && node test/ui/storage.js && node test/ui/polish.js && node test/ui/book.js && node test/ui/perf.js",
     "verify:restore": "node scripts/verify-restore.js"

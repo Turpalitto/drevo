@@ -6,7 +6,7 @@ if [ -z "$KORNI_PASSWORD" ]; then
   exit 1
 fi
 if ! command -v node >/dev/null 2>&1; then
-  echo "Установите Node.js 22+ : https://nodejs.org"
+  echo "Установите Node.js 22.13+ : https://nodejs.org"
   exit 1
 fi
-exec node server.js
+exec node --env-file-if-exists=.env server.js
