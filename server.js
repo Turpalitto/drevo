@@ -608,6 +608,17 @@ function parseCookies(req) {
   }
   return out;
 }
+const TRUST_PROXY = process.env.TRUST_PROXY === "1" || process.env.TRUST_PROXY === "true";
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const xff = req.headers["x-forwarded-for"];
+    if (typeof xff === "string" && xff.trim()) {
+      return xff.split(",")[0].trim();
+    }
+  }
+  return req.socket.remoteAddress || "?";
+}
+
 const attempts = new Map(); // ip -> {count, resetAt}
 function rateLimited(ip) {
   const now = Date.now();
@@ -622,6 +633,9 @@ function rateLimited(ip) {
     }
   }
   return a.count > 10;
+}
+function resetRateLimit(ip) {
+  attempts.delete(ip);
 }
 
 // --- http helpers ---
@@ -821,7 +835,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === "/api/contributions" && req.method === "POST") {
       if (!validContributionToken(url.searchParams.get("token"))) return sendJson(res, 403, { error: "Ссылка недействительна." });
-      const ip = req.socket.remoteAddress || "?";
+      const ip = clientIp(req);
       if (rateLimited("contribution:" + ip)) return sendJson(res, 429, { error: "Слишком много отправок. Попробуйте позже." });
       let body;
       try { body = JSON.parse(await readBody(req, res)); checkContribution(body); }
@@ -832,13 +846,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === "/api/login" && req.method === "POST") {
-      const ip = req.socket.remoteAddress || "?";
+      const ip = clientIp(req);
       if (rateLimited(ip)) return sendJson(res, 429, { error: "Слишком много попыток. Подождите 5 минут." });
       let body = {};
       try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "bad request" }); }
       if (!passwordHash || !body.password || !verifyPassword(body.password, passwordHash)) {
         return sendJson(res, 401, { error: "Неверный пароль." });
       }
+      resetRateLimit(ip);
       const role = ownerRole();
       const token = newSession({ id: "owner", role });
       res.setHeader("Set-Cookie", sessionCookie(req, token));

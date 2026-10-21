@@ -1,3 +1,5 @@
 run:
   containerPort: 3000
   persistenceMount: /data
+  # environment:
+  #   TRUST_PROXY: "1" # Раскомментируйте, если приложение запущено за прокси Amvera

@@ -410,6 +410,77 @@ test("В1: тело запроса больше 20 МБ возвращает 413
   assert.equal(json.error, "Архив слишком большой для сохранения целиком (лимит 20 МБ). Сообщите хранителю.");
 });
 
+test("В4: успешные входы сбрасывают лимит попыток; TRUST_PROXY=1 управляет учётом X-Forwarded-For", async () => {
+  // 1. 10 успешных входов подряд не блокируют 11-й (лимит сбрасывается)
+  for (let i = 0; i < 11; i++) {
+    const r = await fetch(BASE + "/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: PASSWORD }),
+    });
+    assert.equal(r.status, 200, `успешный вход #${i + 1} не блокируется`);
+  }
+
+  // 2. Сервер с TRUST_PROXY=1 корректно изолирует клиентов по первому адресу X-Forwarded-For
+  const proxyPort = 3179;
+  const proxyDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "korni-proxy-"));
+  const proxyServer = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
+    env: { ...process.env, KORNI_PASSWORD: PASSWORD, DATA_DIR: proxyDataDir, PORT: String(proxyPort), TRUST_PROXY: "1" },
+    stdio: "pipe",
+  });
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(Error("прокси-сервер не запустился")), 5000);
+    proxyServer.stdout.on("data", (d) => {
+      if (String(d).includes("Корни: общая база")) { clearTimeout(timer); resolve(); }
+    });
+  });
+
+  try {
+    const proxyBase = `http://127.0.0.1:${proxyPort}`;
+    // 11 запросов с РАЗНЫХ IP через X-Forwarded-For не блокируются:
+    for (let i = 1; i <= 11; i++) {
+      const res = await fetch(proxyBase + "/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Forwarded-For": `198.51.100.${i}, 10.0.0.1` },
+        body: JSON.stringify({ password: "неверный-пароль" }),
+      });
+      assert.equal(res.status, 401, `запрос с IP .${i} не блокируется по 429`);
+    }
+
+    // Проверяем сброс лимита при успешном входе:
+    // 5 неудачных попыток с targetIp:
+    const targetIp = "198.51.100.99";
+    for (let i = 1; i <= 5; i++) {
+      const res = await fetch(proxyBase + "/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Forwarded-For": `${targetIp}, 10.0.0.1` },
+        body: JSON.stringify({ password: "неверный-пароль" }),
+      });
+      assert.equal(res.status, 401);
+    }
+    // Успешный вход с этого же IP сбрасывает лимит:
+    const resLogin = await fetch(proxyBase + "/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": `${targetIp}, 10.0.0.1` },
+      body: JSON.stringify({ password: PASSWORD }),
+    });
+    assert.equal(resLogin.status, 200, "успешный вход сбрасывает счётчик");
+
+    // Ещё 6 неудачных попыток: если бы счётчик не сбросился, 5 + 6 = 11-я заблокировалась бы,
+    // но так как счётчик сброшен, 6-я попытка всё ещё возвращает 401
+    for (let i = 1; i <= 6; i++) {
+      const res = await fetch(proxyBase + "/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Forwarded-For": `${targetIp}, 10.0.0.1` },
+        body: JSON.stringify({ password: "неверный-пароль" }),
+      });
+      assert.equal(res.status, 401, `попытка #${i} после сброса возвращает 401, а не 429`);
+    }
+  } finally {
+    proxyServer.kill("SIGTERM");
+  }
+});
+
 test("выход из сессии", async () => {
   const res = await api("/api/logout", { method: "POST" });
   assert.equal(res.status, 200);
