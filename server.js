@@ -690,17 +690,6 @@ function sessionUser(req, res) {
   if (user.role !== row.role) db.prepare("UPDATE sessions SET role=? WHERE token=?").run(user.role, hash);
   return { id: row.userId, name: user.name, role: user.role, token };
 }
-function validSession(token) {
-  if (!token) return false;
-  const hash = hashToken(token);
-  const row = db.prepare("SELECT createdAt FROM sessions WHERE token=?").get(hash);
-  if (!row) return false;
-  if (Date.now() - row.createdAt > SESSION_TTL_MS) {
-    db.prepare("DELETE FROM sessions WHERE token=?").run(hash);
-    return false;
-  }
-  return true;
-}
 function sessionCookie(req, token) {
   const cookieAttrs = `HttpOnly; Path=/; SameSite=Lax; Max-Age=${30 * 24 * 3600}`;
   const secureAttr = (requestIsHttps(req) && !("localhost" === req.headers.host?.split(":")[0])) ? "; Secure" : "";

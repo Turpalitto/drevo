@@ -143,8 +143,8 @@ sqlite3 data/korni.db "DELETE FROM kv WHERE key='owner_role';"
 Требуется Node.js ≥ 22.13 (используется встроенный `node:sqlite` без дополнительных флагов и `node:test`).
 
 ```bash
-npm test              # автотесты API: вход, сессии, ревизии, заявки (8 штук)
-npm run test:ui       # проверки интерфейса в настоящем браузере (36 + 27 штук)
+npm test              # автотесты API и безопасности (43 теста)
+npm run test:ui       # проверки интерфейса и древа в браузере (141 тест)
 npm run verify:restore -- <файл>   # фактическое восстановление из копии
 node server.js        # запуск без зависимостей
 ```
