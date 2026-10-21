@@ -850,6 +850,7 @@ body.role-viewer .quick-add-row,body.role-viewer #editPersonButton,body.role-vie
     <button id="duplicatesButton">👥 Похожие записи</button>
     <button id="demoFromSettings">👁 Посмотреть демо-пример</button>
     <button id="copyContributionLink">🔗 Скопировать ссылку для родственников</button>
+    <button id="rotateContributionLink">🔄 Выпустить новую ссылку</button>
     <button id="exportButton">↓ Скачать резервную копию JSON</button>
     <button id="exportMediaButton">↓ Скачать архив с оригиналами файлов</button>
     <button id="exportGedcom">↓ Скачать GEDCOM (.ged)</button>
@@ -3332,9 +3333,10 @@ function applyRoleUi(){
   for(const id of ["addButton","treeAddButton","emptyAddButton","emptyImportButton","editPersonButton","deleteButton"]){const n=$("#"+id);if(n)n.hidden=noEdit}
   $("#undoButton").hidden=viewer;
   $("#quickHint").hidden=$("#quickHint").hidden||noEdit;
-  for(const id of ["newButton","importButton","emptyImportButton","importGedcomButton","importCsvButton","restoreBackupButton","duplicatesButton","copyContributionLink","submissionsButton","accessButton"]){
+  for(const id of ["newButton","importButton","emptyImportButton","importGedcomButton","importCsvButton","restoreBackupButton","duplicatesButton","copyContributionLink","rotateContributionLink","submissionsButton","accessButton"]){
     const n=$("#"+id);if(n)n.hidden=server&&!keeper;
   }
+  const rcl=$("#rotateContributionLink");if(rcl)rcl.hidden=!server||!keeper;
   $("#titleForm").hidden=server&&!keeper;
   $("#settingsButton").title=keeper?"Управление архивом":"Экспорт и книга";
   const lb=$("#logoutButton");if(lb)lb.hidden=!server;
@@ -4014,6 +4016,17 @@ $("#copyContributionLink").onclick=async()=>{
     const r=await fetch("/api/contribution-link",{cache:"no-store"}),result=await r.json();if(!r.ok)throw Error();
     await navigator.clipboard.writeText(result.url);notify("Ссылка для родственников скопирована.");
   }catch(e){notify("Не удалось скопировать ссылку. Откройте сайт через защищённое соединение и попробуйте ещё раз.")}
+};
+$("#rotateContributionLink").onclick=async()=>{
+  if(!serverMode){notify("Ссылка для родственников доступна в общей серверной версии.");return}
+  const ok=await ask("Выпустить новую ссылку для родственников? Прежняя ссылка сразу перестанет действовать.","Смена ссылки");
+  if(!ok)return;
+  try{
+    const r=await fetch("/api/contribution-link/rotate",{method:"POST"}),result=await r.json();
+    if(!r.ok)throw Error(result.error||"Ошибка при выпуске ссылки");
+    if(result.url)await navigator.clipboard.writeText(result.url).catch(()=>{});
+    notify("Новая ссылка выпущена и скопирована.");
+  }catch(e){notify(e.message||"Не удалось выпустить новую ссылку.")}
 };
 $("#titleForm").onsubmit=e=>{
   e.preventDefault();const title=$("#titleInput").value.trim();if(!title)return;

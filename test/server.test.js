@@ -735,6 +735,39 @@ test("С9: автоматическое дополнение взаимных с
   assert.ok(r2.spouses.includes(1), "после отката у 2 взаимно восстановился супруг 1");
 });
 
+test("С8: ротация гостевой ссылки для сбора сведений делает старую недействительной", async () => {
+  // 1. Получаем текущую гостевую ссылку
+  const linkRes1 = await api("/api/contribution-link");
+  assert.equal(linkRes1.status, 200);
+  const data1 = await body(linkRes1);
+  const token1 = data1.url.split("contribute=")[1];
+  assert.ok(token1, "токен получен");
+
+  // 2. Старый токен открывает контекст
+  const ctx1 = await api(`/api/contribution/context?token=${token1}`);
+  assert.equal(ctx1.status, 200, "старый токен действует");
+
+  // 3. Без сессии хранителя ротация запрещена
+  const unauthRes = await fetch(`${BASE}/api/contribution-link/rotate`, { method: "POST" });
+  assert.equal(unauthRes.status, 401, "анонимный вызов отклонён");
+
+  // 4. Хранитель выпускает новый токен
+  const rotateRes = await api("/api/contribution-link/rotate", { method: "POST" });
+  assert.equal(rotateRes.status, 200);
+  const rotated = await body(rotateRes);
+  assert.ok(rotated.ok);
+  assert.ok(rotated.token);
+  assert.notEqual(rotated.token, token1, "новый токен отличается от старого");
+
+  // 5. Старая ссылка сразу перестаёт работать
+  const ctxOld = await api(`/api/contribution/context?token=${token1}`);
+  assert.equal(ctxOld.status, 403, "старый токен отклонён");
+
+  // 6. Новая ссылка успешно работает
+  const ctxNew = await api(`/api/contribution/context?token=${rotated.token}`);
+  assert.equal(ctxNew.status, 200, "новый токен открывает контекст");
+});
+
 test("выход из сессии", async () => {
   const res = await api("/api/logout", { method: "POST" });
   assert.equal(res.status, 200);

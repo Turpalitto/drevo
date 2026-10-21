@@ -476,6 +476,11 @@ function contributionToken() {
   db.prepare("INSERT INTO kv(key,value) VALUES('contribution_token',?)").run(token);
   return token;
 }
+function rotateContributionToken() {
+  const token = crypto.randomBytes(24).toString("hex");
+  kvSet("contribution_token", token);
+  return token;
+}
 function checkContribution(v) {
   if (!v || typeof v !== "object") throw Error("bad contribution");
   const text = (key, max, required = false) => {
@@ -1314,8 +1319,16 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === "/api/contribution-link" && req.method === "GET") {
       if (!isKeeper) return deny(res);
-      const origin = `${req.headers["x-forwarded-proto"] || "http"}://${req.headers.host}`;
+      const proto = (req.headers["x-forwarded-proto"] || "").split(",")[0].trim() || (requestIsHttps(req) ? "https" : "http");
+      const origin = `${proto}://${req.headers.host}`;
       return sendJson(res, 200, { url: `${origin}/?contribute=${contributionToken()}` });
+    }
+    if (url.pathname === "/api/contribution-link/rotate" && req.method === "POST") {
+      if (!isKeeper) return deny(res);
+      const token = rotateContributionToken();
+      const proto = (req.headers["x-forwarded-proto"] || "").split(",")[0].trim() || (requestIsHttps(req) ? "https" : "http");
+      const origin = `${proto}://${req.headers.host}`;
+      return sendJson(res, 200, { ok: true, token, url: `${origin}/?contribute=${token}` });
     }
     if (url.pathname === "/api/contributions" && req.method === "GET") {
       if (!isKeeper) return deny(res);
