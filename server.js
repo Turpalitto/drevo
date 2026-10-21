@@ -172,9 +172,21 @@ function getArchive() {
   if (!row) {
     const f = freshArchive();
     db.prepare("INSERT INTO kv(key,value) VALUES('archive',?)").run(JSON.stringify(f));
+    kvSet("archive_rev", String(f.rev || 1));
     return f;
   }
   return JSON.parse(row.value);
+}
+function getArchiveRev() {
+  const cached = kvGet("archive_rev");
+  if (cached !== null && cached !== undefined && cached !== "") {
+    const n = Number(cached);
+    if (Number.isSafeInteger(n) && n > 0) return n;
+  }
+  const a = getArchive();
+  const rev = Number(a.rev) || 1;
+  kvSet("archive_rev", String(rev));
+  return rev;
 }
 function kvGet(key) {
   const row = db.prepare("SELECT value FROM kv WHERE key=?").get(key);
@@ -232,6 +244,7 @@ refreshPasswordHash();
 function setArchive(a) {
   backupDailyBefore();
   db.prepare("INSERT INTO kv(key,value) VALUES('archive',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(a));
+  kvSet("archive_rev", String(Number(a.rev) || 1));
 }
 
 // --- история изменений по человеку ---
@@ -895,7 +908,7 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (url.pathname === "/api/rev" && req.method === "GET") {
-      return sendJson(res, 200, { rev: getArchive().rev || 1 });
+      return sendJson(res, 200, { rev: getArchiveRev() });
     }
     // Статус последней автоматической копии: интерфейс показывает его в «Управлении»,
     // чтобы сбой копирования не остался незамеченным.

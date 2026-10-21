@@ -249,6 +249,72 @@ test("В3: ежедневная копия фиксирует состояние
   assert.equal(backup3.people.length, stateBefore.people.length);
 });
 
+test("В2: /api/rev кэшируется в kv archive_rev и совпадает с archive.rev после PUT, подтверждения предложения и заявки", async () => {
+  const { DatabaseSync } = require("node:sqlite");
+
+  // 1. Проверяем совпадение после PUT
+  const current = await body(await api("/api/archive"));
+  const nextRev = (current.rev || 1) + 1;
+  const nextArchive = { ...current, rev: nextRev };
+  const putRes = await api("/api/archive", { method: "PUT", body: JSON.stringify({ baseRev: current.rev || 1, archive: nextArchive }) });
+  assert.equal(putRes.status, 200);
+
+  const revAfterPut = (await body(await api("/api/rev"))).rev;
+  assert.equal(revAfterPut, nextRev, "ревизия после PUT совпадает");
+
+  // Проверяем прямое значение в SQLite
+  const db = new DatabaseSync(path.join(testDataDir, "korni.db"));
+  const row1 = db.prepare("SELECT value FROM kv WHERE key='archive_rev'").get();
+  assert.equal(Number(row1.value), nextRev, "в kv лежит актуальная archive_rev после PUT");
+
+  // 2. Проверяем совпадение после подтверждения заявки гостя
+  const linkRes = await api("/api/contribution-link");
+  const linkData = await body(linkRes);
+  const token = new URL(linkData.url).searchParams.get("contribute");
+
+  const contribRes = await fetch(BASE + "/api/contributions?token=" + encodeURIComponent(token), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Иса", submittedBy: "Гость", contact: "", relativeId: 1, secondParentId: null, relation: "child", sex: "M", birth: 1970, birthPlace: "", info: "", notes: "" }),
+  });
+  const { id: contribId } = await body(contribRes);
+  const approveContrib = await api(`/api/contributions/${contribId}/approve`, { method: "POST" });
+  assert.equal(approveContrib.status, 200);
+
+  const archiveAfterContrib = await body(await api("/api/archive"));
+  const revAfterContrib = (await body(await api("/api/rev"))).rev;
+  assert.equal(revAfterContrib, archiveAfterContrib.rev, "ревизия после подтверждения заявки совпадает");
+
+  // 3. Проверяем совпадение после подтверждения предложения редактора
+  const invRes = await api("/api/access/invite", { method: "POST", body: JSON.stringify({ role: "editor", note: "Тест ревизии" }) });
+  const invToken = (await body(invRes)).url.split("invite=")[1];
+  const acceptRes = await fetch(BASE + `/api/invite/${invToken}/accept`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Редактор Ревизии" }),
+  });
+  const editorCookie = acceptRes.headers.get("set-cookie").split(";")[0];
+
+  const propRes = await fetch(BASE + "/api/proposals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: editorCookie },
+    body: JSON.stringify({
+      baseRev: archiveAfterContrib.rev,
+      summary: "Правка ревизии",
+      patches: [{ op: "edit", id: 1, before: archiveAfterContrib.people.find((p) => p.id === 1), after: { ...archiveAfterContrib.people.find((p) => p.id === 1), occupation: "Архитектор" } }],
+    }),
+  });
+  const { id: propId } = await body(propRes);
+  const approveProp = await api(`/api/proposals/${propId}/approve`, { method: "POST" });
+  assert.equal(approveProp.status, 200);
+
+  const archiveAfterProp = await body(await api("/api/archive"));
+  const revAfterProp = (await body(await api("/api/rev"))).rev;
+  assert.equal(revAfterProp, archiveAfterProp.rev, "ревизия после утверждения предложения совпадает");
+
+  const row2 = db.prepare("SELECT value FROM kv WHERE key='archive_rev'").get();
+  assert.equal(Number(row2.value), archiveAfterProp.rev, "в kv лежит актуальная archive_rev после предложения");
+  db.close();
+});
+
 test("выход из сессии", async () => {
   const res = await api("/api/logout", { method: "POST" });
   assert.equal(res.status, 200);
