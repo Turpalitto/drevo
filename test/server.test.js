@@ -172,6 +172,44 @@ test("поток заявок: ссылка, отправка, подтверж�
   assert.ok(!final.people.some((p) => p.name === "Лёма"));
 });
 
+test("С4: сохранение полного текста «Кратко о человеке» в notes заявки", async () => {
+  const link = await api("/api/contribution-link");
+  const token = (await body(link)).url.split("contribute=")[1];
+  const longInfo = "Родился в горном селении, с юных лет работал кузнецом, затем переехал в город и открыл собственную мастерскую. Награждён почётными грамотами за трудовые заслуги.";
+  const guestNotes = "Семейные предания записаны со слов внука.";
+
+  const contrib = await fetch(BASE + "/api/contributions?token=" + encodeURIComponent(token), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: "Сайд-Эмин",
+      submittedBy: "Племянник",
+      contact: "+79001234567",
+      relativeId: 1,
+      secondParentId: null,
+      relation: "child",
+      sex: "M",
+      birth: 1955,
+      birthPlace: "Шатой",
+      info: longInfo,
+      notes: guestNotes,
+    }),
+  });
+  assert.equal(contrib.status, 201);
+  const { id } = await body(contrib);
+
+  const approve = await api(`/api/contributions/${id}/approve`, { method: "POST" });
+  assert.equal(approve.status, 200);
+
+  const arch = await body(await api("/api/archive"));
+  const person = arch.people.find((p) => p.name === "Сайд-Эмин");
+  assert.ok(person, "человек добавлен в архив");
+  assert.equal(person.info, longInfo.slice(0, 80), "info содержит первые 80 символов");
+  assert.ok(person.notes.includes(`Кратко (от заявителя): ${longInfo}`), "notes содержит полный текст info с пометкой");
+  assert.ok(person.notes.includes(guestNotes), "notes содержит исходные заметки заявителя");
+  assert.ok(person.notes.length <= 10000, "лимит notes 10000 соблюдён");
+});
+
 test("ссылка-приглашение требует сессию владельца; гостевой контекст требует токен", async () => {
   // Проверим, что Context endpoint без токена отклоняется:
   const no = await fetch(BASE + "/api/contribution/context");

@@ -411,7 +411,11 @@ function checkContribution(v) {
 function personFromContribution(v, archive) {
   const id = Math.max(0, ...archive.people.map((p) => p.id)) + 1;
   const source = [`Предложено: ${v.submittedBy.trim()}`, v.contact.trim() && `Контакт: ${v.contact.trim()}`].filter(Boolean).join(" · ");
-  return { id, uid: crypto.randomUUID(), name: v.name.trim(), native: "", nameVariants: "", sex: v.sex, teip: "", birth: v.birth, death: null, father: null, mother: null, tukhum: "", notes: v.notes.trim(), source, birthFull: "", deathFull: "", birthPlace: v.birthPlace.trim(), deathPlace: "", photo: "", info: v.info.trim().slice(0, 80), occupation: "", residence: "", spouses: [], events: [], sources: [], memories: [] };
+  const rawInfo = (v.info || "").trim();
+  const rawNotes = (v.notes || "").trim();
+  const infoPrefix = rawInfo ? `Кратко (от заявителя): ${rawInfo}` : "";
+  const combinedNotes = [infoPrefix, rawNotes].filter(Boolean).join("\n\n").slice(0, 10000);
+  return { id, uid: crypto.randomUUID(), name: v.name.trim(), native: "", nameVariants: "", sex: v.sex, teip: "", birth: v.birth, death: null, father: null, mother: null, tukhum: "", notes: combinedNotes, source, birthFull: "", deathFull: "", birthPlace: v.birthPlace.trim(), deathPlace: "", photo: "", info: rawInfo.slice(0, 80), occupation: "", residence: "", spouses: [], events: [], sources: [], memories: [] };
 }
 
 // --- validation (same rules as client) ---
