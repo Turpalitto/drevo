@@ -837,7 +837,11 @@ const server = http.createServer(async (req, res) => {
           db.prepare("INSERT INTO users(id,name,role,createdAt,lastSeenAt) VALUES(?,?,?,?,?)").run(userId, name, invite.role, Date.now(), Date.now());
         }
 
-        db.prepare("UPDATE invites SET usedAt=? WHERE token_hash=?").run(Date.now(), hash);
+        // С2: Атомарное погашение приглашения для предотвращения гонок
+        const claim = db.prepare("UPDATE invites SET usedAt=? WHERE token_hash=? AND usedAt IS NULL").run(Date.now(), hash);
+        if (claim.changes === 0) {
+          return sendJson(res, 409, { error: "Приглашение уже использовано или отозвано." });
+        }
         const token = newSession({ id: userId, role });
         res.setHeader("Set-Cookie", sessionCookie(req, token));
         return sendJson(res, 200, { ok: true, role, name: userName });

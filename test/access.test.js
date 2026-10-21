@@ -493,3 +493,26 @@ test("К2: новый хранитель может восстановить п�
   const meOwner = await json(await call("/api/me", { cookie: keeper }));
   assert.equal(meOwner.role, "keeper", "владелец пароля снова стал хранителем");
 });
+
+test("С2: одновременное принятие одного приглашения атомарно (защита от гонки)", async () => {
+  const activeKeeper = (await json(await call("/api/me", { cookie: keeper }))).role === "keeper" ? keeper : viewer;
+  const invRes = await call("/api/access/invite", {
+    method: "POST", cookie: activeKeeper,
+    body: JSON.stringify({ role: "viewer", note: "Гонка" }),
+  });
+  const token = (await json(invRes)).url.split("invite=")[1];
+
+  // 4 одновременных запроса на принятие одного и того же приглашения
+  const parallel = await Promise.all([
+    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 1" }) }),
+    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 2" }) }),
+    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 3" }) }),
+    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 4" }) }),
+  ]);
+
+  const statuses = parallel.map((r) => r.status);
+  const successes = statuses.filter((s) => s === 200);
+  const conflicts = statuses.filter((s) => s === 409 || s === 410);
+  assert.equal(successes.length, 1, "ровно один запрос принят успешно");
+  assert.equal(conflicts.length, 3, "остальные параллельные запросы отклонены");
+});
