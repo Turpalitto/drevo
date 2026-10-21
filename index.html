@@ -4417,6 +4417,11 @@ async function pushToServer(next,forceBase){
       onServerConflict(cur);
       return false;
     }
+    if(r.status===413){
+      let err=null;try{err=(await r.json()).error}catch(e){}
+      notify(err||"Архив слишком большой для сохранения целиком (лимит 20 МБ). Сообщите хранителю.");
+      return false;
+    }
     if(r.status===400){notify("Сервер отклонил изменение. Скачайте резервную копию из «Управления».");return false}
     if(!r.ok)throw Error("push");
     dirtyPush=false;return true;

@@ -315,6 +315,33 @@ test("В2: /api/rev кэшируется в kv archive_rev и совпадает
   db.close();
 });
 
+test("В1: тело запроса больше 20 МБ возвращает 413 с понятным текстом ошибки", async () => {
+  const http = require("node:http");
+  const payloadChunk = Buffer.alloc(1024 * 1024, "a");
+  const chunksCount = 21;
+  const res = await new Promise((resolve, reject) => {
+    const req = http.request(BASE + "/api/archive", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...(cookie ? { Cookie: cookie } : {}),
+      },
+    }, (res) => {
+      const data = [];
+      res.on("data", (c) => data.push(c));
+      res.on("end", () => resolve({ status: res.statusCode, body: Buffer.concat(data).toString("utf8") }));
+    });
+    req.on("error", () => {});
+    for (let i = 0; i < chunksCount; i++) {
+      if (!req.destroyed) req.write(payloadChunk);
+    }
+    req.end();
+  });
+  assert.equal(res.status, 413);
+  const json = JSON.parse(res.body);
+  assert.equal(json.error, "Архив слишком большой для сохранения целиком (лимит 20 МБ). Сообщите хранителю.");
+});
+
 test("выход из сессии", async () => {
   const res = await api("/api/logout", { method: "POST" });
   assert.equal(res.status, 200);

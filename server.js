@@ -631,17 +631,36 @@ const sendJson = (res, code, obj) => {
   res.setHeader("Cache-Control", "no-store");
   send(res, code, JSON.stringify(obj));
 };
-function readBody(req) {
+const TOO_BIG_ERROR = "Архив слишком большой для сохранения целиком (лимит 20 МБ). Сообщите хранителю.";
+function readBody(req, res) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
+    let handled = false;
     req.on("data", (c) => {
+      if (handled) return;
       size += c.length;
-      if (size > MAX_BODY) { reject(Error("too big")); req.destroy(); return; }
+      if (size > MAX_BODY) {
+        handled = true;
+        const err = new Error(TOO_BIG_ERROR);
+        err.status = 413;
+        if (res && !res.headersSent) {
+          sendJson(res, 413, { error: TOO_BIG_ERROR });
+        }
+        req.pause();
+        req.on("data", () => {});
+        req.resume();
+        reject(err);
+        return;
+      }
       chunks.push(c);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
+    req.on("end", () => {
+      if (!handled) resolve(Buffer.concat(chunks).toString("utf8"));
+    });
+    req.on("error", (e) => {
+      if (!handled) reject(e);
+    });
   });
 }
 function sameHash(a, b) {
@@ -801,8 +820,8 @@ const server = http.createServer(async (req, res) => {
       const ip = req.socket.remoteAddress || "?";
       if (rateLimited("contribution:" + ip)) return sendJson(res, 429, { error: "Слишком много отправок. Попробуйте позже." });
       let body;
-      try { body = JSON.parse(await readBody(req)); checkContribution(body); }
-      catch (e) { return sendJson(res, 400, { error: "Проверьте заполненные данные." }); }
+      try { body = JSON.parse(await readBody(req, res)); checkContribution(body); }
+      catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "Проверьте заполненные данные." }); }
       const id = crypto.randomBytes(12).toString("hex");
       db.prepare("INSERT INTO contributions(id,createdAt,status,payload) VALUES(?,?,?,?)").run(id, Date.now(), "pending", JSON.stringify(body));
       return sendJson(res, 201, { ok: true, id });
@@ -812,7 +831,7 @@ const server = http.createServer(async (req, res) => {
       const ip = req.socket.remoteAddress || "?";
       if (rateLimited(ip)) return sendJson(res, 429, { error: "Слишком много попыток. Подождите 5 минут." });
       let body = {};
-      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "bad request" }); }
       if (!passwordHash || !body.password || !verifyPassword(body.password, passwordHash)) {
         return sendJson(res, 401, { error: "Неверный пароль." });
       }
@@ -847,7 +866,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (accept && req.method === "POST") {
         let body = {};
-        try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+        try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "bad request" }); }
         const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
         if (!invite.userId && !name) return sendJson(res, 400, { error: "Укажите имя." });
 
@@ -925,8 +944,8 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/archive" && req.method === "PUT") {
       if (!isKeeper) return deny(res);
       let body;
-      try { body = JSON.parse(await readBody(req)); }
-      catch (e) { return sendJson(res, 400, { error: "Некорректный JSON." }); }
+      try { body = JSON.parse(await readBody(req, res)); }
+      catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "Некорректный JSON." }); }
       const cur = getArchive();
       if (!Number.isSafeInteger(body.baseRev) || body.baseRev !== (cur.rev || 1)) {
         return sendJson(res, 409, { error: "Архив изменился. Обновите страницу.", current: filterArchive(cur, user.role) });
@@ -959,7 +978,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/proposals" && req.method === "POST") {
       if (!canEdit) return deny(res);
       let body;
-      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "Некорректный JSON." }); }
+      try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "Некорректный JSON." }); }
       const patches = Array.isArray(body.patches) ? body.patches.slice(0, 300) : [];
       if (!patches.length) return sendJson(res, 400, { error: "Нет изменений." });
       for (const p of patches) {
@@ -1056,7 +1075,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/access/revoke-invite" && req.method === "POST") {
       if (!isKeeper) return deny(res);
       let body = {};
-      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "bad request" }); }
       if (typeof body.id !== "string") return sendJson(res, 400, { error: "bad invite id" });
       const inv = db.prepare("SELECT usedAt FROM invites WHERE token_hash=?").get(body.id);
       if (!inv) return sendJson(res, 404, { error: "Приглашение не найдено." });
@@ -1067,7 +1086,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/access/invite" && req.method === "POST") {
       if (!isKeeper) return deny(res);
       let body = {};
-      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "bad request" }); }
       const role = ROLES.includes(body.role) ? body.role : "viewer";
       if (role === "keeper") return sendJson(res, 400, { error: "Второго хранителя назначают из списка участников." });
       const token = crypto.randomBytes(24).toString("hex");
@@ -1083,7 +1102,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/access/relogin" && req.method === "POST") {
       if (!isKeeper) return deny(res);
       let body = {};
-      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "bad request" }); }
       if (typeof body.userId !== "string" || !body.userId.trim()) return sendJson(res, 400, { error: "bad userId" });
       const targetUser = db.prepare("SELECT id, name, role, revokedAt FROM users WHERE id=?").get(body.userId.trim());
       if (!targetUser || targetUser.revokedAt) return sendJson(res, 404, { error: "Участник не найден или его доступ отозван." });
@@ -1099,7 +1118,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/access/revoke" && req.method === "POST") {
       if (!isKeeper) return deny(res);
       let body = {};
-      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "bad request" }); }
       if (typeof body.userId !== "string") return sendJson(res, 400, { error: "bad user" });
       if (body.userId === user.id) return sendJson(res, 400, { error: "Нельзя отозвать доступ у самого себя." });
       const target = db.prepare("SELECT role, revokedAt FROM users WHERE id=?").get(body.userId);
@@ -1114,7 +1133,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/access/role" && req.method === "POST") {
       if (!isKeeper) return deny(res);
       let body = {};
-      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "bad request" }); }
       if (typeof body.userId !== "string" || !ROLES.includes(body.role)) return sendJson(res, 400, { error: "bad role" });
       if (body.userId === user.id && body.role !== "keeper") {
         return sendJson(res, 400, { error: "Хранитель не может понизить сам себя. Используйте передачу архива." });
@@ -1143,7 +1162,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/access/transfer" && req.method === "POST") {
       if (!isKeeper) return deny(res);
       let body = {};
-      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "bad request" }); }
       const target = db.prepare("SELECT id,name FROM users WHERE id=? AND revokedAt IS NULL").get(String(body.userId || ""));
       if (!target) return sendJson(res, 404, { error: "Участник не найден." });
       db.prepare("UPDATE users SET role='keeper' WHERE id=?").run(target.id);
@@ -1154,7 +1173,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/access/visibility" && req.method === "POST") {
       if (!isKeeper) return deny(res);
       let body = {};
-      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      try { body = JSON.parse(await readBody(req, res)); } catch (e) { if (res.headersSent || e?.status === 413) return; return sendJson(res, 400, { error: "bad request" }); }
       return sendJson(res, 200, { ok: true, visibility: setAccessSettings(body) });
     }
 
@@ -1214,6 +1233,7 @@ const server = http.createServer(async (req, res) => {
     }
     return sendJson(res, 404, { error: "not found" });
   } catch (e) {
+    if (res.headersSent) return;
     console.error("Ошибка обработки запроса:", e && e.message ? e.message : e);
     return sendJson(res, 500, { error: "server error" });
   }
