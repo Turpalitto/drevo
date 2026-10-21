@@ -143,12 +143,12 @@ const MASKED_FIELDS = [
   "occupation", "residence", "info", "notes", "source", "photo", "photoMeta",
   "events", "sources", "memories", "documents", "unions",
 ];
-function filterPerson(person, role) {
+function filterPerson(person, role, allPeople) {
   if (!person || typeof person !== "object" || role === "keeper") return person;
   const v = accessSettings();
   if (!v.living && !v.photos && !v.memories) return person;
   const copy = JSON.parse(JSON.stringify(person));
-  if (v.living && isLiving(copy)) {
+  if (v.living && isLiving(copy, allPeople)) {
     for (const key of MASKED_FIELDS) delete copy[key];
     copy.masked = true;
   }
@@ -160,7 +160,7 @@ function filterPerson(person, role) {
 function filterArchive(archive, role) {
   if (role === "keeper") return archive;
   const copy = JSON.parse(JSON.stringify(archive));
-  copy.people = (copy.people || []).map((p) => filterPerson(p, role));
+  copy.people = (copy.people || []).map((p) => filterPerson(p, role, copy.people));
   return copy;
 }
 
@@ -169,13 +169,31 @@ function freshArchive() {
 }
 // Живым считаем человека без даты смерти, родившегося позже (текущий год − 110).
 // Если дат нет вовсе — тоже считаем живым: молчание не должно раскрывать данные.
-// Такой же подход по умолчанию в webtrees и Gramps Web.
+// Исключения: явный флаг deceased: true или ребёнок, родившийся ≥ 95 лет назад.
 const LIVING_AGE_LIMIT = 110;
-function isLiving(p) {
-  if (p.death !== null && p.death !== undefined) return false;
+function isLiving(p, allPeople) {
+  if (!p) return false;
+  if (p.deceased === true) return false;
+  if (p.death !== null && p.death !== undefined && p.death !== "") return false;
   if (typeof p.deathFull === "string" && p.deathFull.trim()) return false;
   const year = new Date().getFullYear();
-  return !(p.birth && p.birth <= year - LIVING_AGE_LIMIT);
+  if (p.birth && p.birth <= year - LIVING_AGE_LIMIT) return false;
+  if (typeof p.birthFull === "string" && p.birthFull.trim()) {
+    const y = parseInt(p.birthFull.slice(0, 4), 10);
+    if (!Number.isNaN(y) && y <= year - LIVING_AGE_LIMIT) return false;
+  }
+  if (Array.isArray(allPeople)) {
+    for (const c of allPeople) {
+      if (c && (c.father === p.id || c.mother === p.id)) {
+        if (c.birth && c.birth <= year - 95) return false;
+        if (typeof c.birthFull === "string" && c.birthFull.trim()) {
+          const cy = parseInt(c.birthFull.slice(0, 4), 10);
+          if (!Number.isNaN(cy) && cy <= year - 95) return false;
+        }
+      }
+    }
+  }
+  return true;
 }
 function getArchive() {
   const row = db.prepare("SELECT value FROM kv WHERE key='archive'").get();
@@ -544,6 +562,9 @@ function validatePeople(people) {
     // uid — необязательный стабильный идентификатор (GEDCOM 7 UID) в формате UUID.
     if (p.uid !== undefined && p.uid !== null && p.uid !== "" && (typeof p.uid !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(p.uid))) {
       throw Error("bad uid");
+    }
+    if (p.deceased !== undefined && typeof p.deceased !== "boolean") {
+      throw Error("bad deceased");
     }
     for (const key of ["birthFull", "deathFull"]) {
       if (typeof p[key] !== "string" || p[key].length > 10) throw Error("bad date");
@@ -918,7 +939,7 @@ const server = http.createServer(async (req, res) => {
       // Гостевая ссылка отдаёт минимум: у живых людей год рождения не раскрываем,
       // а имя оставляем — иначе родственник не сможет выбрать себя в списке.
       const people = archive.people.map((p) => {
-        const living = isLiving(p);
+        const living = isLiving(p, archive.people);
         return { id: p.id, name: p.name, sex: p.sex, living, birth: living ? null : p.birth };
       });
       return sendJson(res, 200, { title: archive.title, people });
@@ -1147,11 +1168,12 @@ const server = http.createServer(async (req, res) => {
       const personId = Number(url.searchParams.get("personId"));
       if (!Number.isSafeInteger(personId)) return sendJson(res, 400, { error: "bad person" });
       const rows = db.prepare("SELECT * FROM history WHERE personId=? ORDER BY id DESC LIMIT 40").all(personId);
+      const archive = getArchive();
       return sendJson(res, 200, {
         history: rows.map((row) => ({
           id: row.id, at: row.at, author: row.authorName || "—", action: row.action,
-          before: row.before ? filterPerson(JSON.parse(row.before), user.role) : null,
-          after: row.after ? filterPerson(JSON.parse(row.after), user.role) : null,
+          before: row.before ? filterPerson(JSON.parse(row.before), user.role, archive.people) : null,
+          after: row.after ? filterPerson(JSON.parse(row.after), user.role, archive.people) : null,
         })),
       });
     }

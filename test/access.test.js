@@ -527,4 +527,56 @@ test("К1: отозванный участник по relogin-ссылке не 
   assert.equal(acceptAttempt.status, 403, "отозванный участник не может войти по relogin");
 });
 
+test("С7: предок без дат с ребёнком 1900 года рождения и персона с deceased: true не маскируются для редактора", async () => {
+  const currentArchive = await json(await call("/api/archive", { cookie: keeper }));
+  const testPeople = [
+    ...currentArchive.people,
+    person(10, "Дедушка предка", "M", null, null, { notes: "Ценная биография предка", teip: "Беной" }),
+    person(11, "Сын предка", "M", 1900, 1975, { father: 10 }),
+    person(12, "Пропавший без вести", "M", null, null, { deceased: true, notes: "Умер в походе", teip: "Беной" }),
+    person(13, "Современник без дат", "M", null, null, { notes: "Живой человек без дат" }),
+  ];
+
+  // 1. Проверяем валидацию: не булево deceased отклоняется
+  const badArchive = { ...currentArchive, rev: currentArchive.rev + 1, people: [...testPeople, person(14, "Ошибка", "M", null, null, { deceased: "yes" })] };
+  const badRes = await call("/api/archive", { method: "PUT", cookie: keeper, body: JSON.stringify({ baseRev: currentArchive.rev, archive: badArchive }) });
+  assert.equal(badRes.status, 400, "deceased не boolean отклоняется");
+
+  // 2. Сохраняем корректный архив
+  const goodArchive = { ...currentArchive, rev: currentArchive.rev + 1, people: testPeople };
+  const putRes = await call("/api/archive", { method: "PUT", cookie: keeper, body: JSON.stringify({ baseRev: currentArchive.rev, archive: goodArchive }) });
+  assert.equal(putRes.status, 200, "архив с deceased сохранён");
+
+  // 3. Создаём активного редактора
+  const invRes = await call("/api/access/invite", {
+    method: "POST", cookie: keeper,
+    body: JSON.stringify({ role: "editor", note: "Тест С7" }),
+  });
+  const token = (await json(invRes)).url.split("invite=")[1];
+  const acceptRes = await call(`/api/invite/${token}/accept`, {
+    method: "POST", body: JSON.stringify({ name: "Редактор С7" }),
+  });
+  const testEditorCookie = cookieOf(acceptRes);
+
+  // 4. Редактор читает архив
+  const editorArchive = await json(await call("/api/archive", { cookie: testEditorCookie }));
+  const p10 = editorArchive.people.find((p) => p.id === 10);
+  const p12 = editorArchive.people.find((p) => p.id === 12);
+  const p13 = editorArchive.people.find((p) => p.id === 13);
+
+  // Предок без дат с ребёнком 1900 г.р. (>= 95 лет назад) — НЕ маскируется
+  assert.equal(p10.masked, undefined, "предок без дат с ребёнком 1900 г. не маскируется");
+  assert.equal(p10.notes, "Ценная биография предка", "заметки предка видны редактору");
+  assert.equal(p10.teip, "Беной", "тейп предка виден редактору");
+
+  // Персона с deceased: true — НЕ маскируется
+  assert.equal(p12.masked, undefined, "персона с deceased: true не маскируется");
+  assert.equal(p12.notes, "Умер в походе", "заметки видны");
+
+  // Персона без дат и без признаков старости — маскируется (считается живой)
+  assert.equal(p13.masked, true, "современник без дат маскируется");
+  assert.equal(p13.notes, undefined, "заметки скрыты");
+});
+
+
 

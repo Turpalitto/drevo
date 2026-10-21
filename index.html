@@ -704,6 +704,7 @@ body.role-viewer .quick-add-row,body.role-viewer #editPersonButton,body.role-vie
           <label class="q2-field" data-q="death" hidden>Второй год смерти<input name="deathQ2" type="number" min="1" placeholder="2010"></label>
           <label>Дата рождения<input name="birthFull" type="date"></label>
           <label>Дата смерти<input name="deathFull" type="date"></label>
+          <label class="checkbox" style="grid-column:1/-1;display:flex;align-items:center;gap:6px;margin-top:4px"><input name="deceased" type="checkbox"> Умер(ла), дата неизвестна</label>
         </div>
         <p class="help">Год можно оставить пустым, если указана полная дата — год подставится сам. Если год известен неточно, выберите «около», «до», «после» или интервал: в карточке он так и появится.</p>
       </details>
@@ -1113,7 +1114,7 @@ function normalizePhotoMeta(v){
   return meta;
 }
 function blankPerson(id){
-  return {id,uid:"",name:"",native:"",nameVariants:"",sex:"U",teip:"",birth:null,death:null,father:null,mother:null,tukhum:"",notes:"",source:"",birthFull:"",deathFull:"",birthPlace:"",deathPlace:"",photo:"",info:"",occupation:"",residence:"",birthQ:"",birthQ2:null,deathQ:"",deathQ2:null,birthPlaceNow:"",deathPlaceNow:"",photoMeta:null,spouses:[],unions:[],events:[],sources:[],memories:[],documents:[]};
+  return {id,uid:"",deceased:false,name:"",native:"",nameVariants:"",sex:"U",teip:"",birth:null,death:null,father:null,mother:null,tukhum:"",notes:"",source:"",birthFull:"",deathFull:"",birthPlace:"",deathPlace:"",photo:"",info:"",occupation:"",residence:"",birthQ:"",birthQ2:null,deathQ:"",deathQ2:null,birthPlaceNow:"",deathPlaceNow:"",photoMeta:null,spouses:[],unions:[],events:[],sources:[],memories:[],documents:[]};
 }
 function person(id,name,sex,birth,father=null,mother=null){
   return {...blankPerson(id),name,sex,birth,father,mother,notes:"Демонстрационная запись. Человек вымышленный.",source:"Пример для знакомства с интерфейсом"};
@@ -1135,6 +1136,7 @@ function demo(){
 function migrate(p){
   const b=blankPerson(p.id);
   for(const k of allFields){ if(p[k]!==undefined) b[k]=p[k]; }
+  if(typeof p.deceased==="boolean")b.deceased=p.deceased;
   if(UID_RE.test(p.uid||""))b.uid=p.uid;
   // Отметку «сведения скрыты настройками доступа» ставит сервер: она нужна
   // интерфейсу, чтобы честно сказать, почему в карточке нет дат и мест.
@@ -1204,6 +1206,7 @@ function validatePeople(people){
       if(!Array.isArray(p.photoMeta.people)||p.photoMeta.people.some(x=>!Number.isSafeInteger(x)))throw Error("Некорректный список людей на фото (id "+p.id+").");
     }
     if(p.uid!==undefined&&p.uid!==""&&!UID_RE.test(p.uid))throw Error("Некорректный идентификатор записи (id "+p.id+").");
+    if(p.deceased!==undefined&&typeof p.deceased!=="boolean")throw Error("Некорректный признак смерти (id "+p.id+").");
     if(typeof p.photo!=="string"||p.photo.length>600000)throw Error("Фото слишком большое (id "+p.id+"). Удалите фото или выберите файл меньше.");
     if(p.photo&&!p.photo.startsWith("data:image/"))throw Error("Некорректное фото (id "+p.id+").");
     for(const key of ["birth","death"]){
@@ -1614,11 +1617,31 @@ function years(p){
   return "Годы не указаны";
 }
 const LIVING_AGE_LIMIT=110;
-function isLiving(p){
+function isLiving(p, allPeople){
   if(!p)return false;
+  if(p.deceased===true)return false;
   if(p.death!==null&&p.death!==undefined&&p.death!=="")return false;
   if(typeof p.deathFull==="string"&&p.deathFull.trim())return false;
   const year=new Date().getFullYear();
+  if(p.birth!==null&&p.birth!==undefined&&p.birth!==""){
+    if((year-Number(p.birth))>LIVING_AGE_LIMIT)return false;
+  }
+  if(typeof p.birthFull==="string"&&p.birthFull.trim()){
+    const y=parseInt(p.birthFull.slice(0,4),10);
+    if(!Number.isNaN(y)&&(year-y)>LIVING_AGE_LIMIT)return false;
+  }
+  const people=Array.isArray(allPeople)?allPeople:(typeof data!=="undefined"&&Array.isArray(data?.people)?data.people:null);
+  if(Array.isArray(people)){
+    for(const c of people){
+      if(c&&(c.father===p.id||c.mother===p.id)){
+        if(c.birth&&(year-Number(c.birth))>=95)return false;
+        if(typeof c.birthFull==="string"&&c.birthFull.trim()){
+          const cy=parseInt(c.birthFull.slice(0,4),10);
+          if(!Number.isNaN(cy)&&(year-cy)>=95)return false;
+        }
+      }
+    }
+  }
   if(p.birth!==null&&p.birth!==undefined&&p.birth!==""){
     return (year-Number(p.birth))<=LIVING_AGE_LIMIT;
   }
@@ -2977,6 +3000,7 @@ function openPerson(id=null){
     if(key==="photo")continue;
     form.elements.namedItem(key).value=p?.[key]??(key==="sex"?"U":"");
   }
+  const decEl=form.elements.namedItem("deceased");if(decEl)decEl.checked=!!p?.deceased;
   syncDateQualFields();
   if(p&&p.photo){$("#photoPreview").src=p.photo;$("#photoRow").hidden=false}
   if(p&&p.photoMeta){
@@ -3133,6 +3157,7 @@ form.onsubmit=async e=>{
     if(key==="photo")continue;
     const value=form.elements.namedItem(key).value.trim();p[key]=numeric.has(key)?value?Number(value):null:value;
   }
+  const decEl=form.elements.namedItem("deceased");if(decEl)p.deceased=decEl.checked;
   p.name=fixChechenPalochka(p.name);
   if(p.native)p.native=fixChechenPalochka(p.native);
   if(p.nameVariants)p.nameVariants=fixChechenPalochka(p.nameVariants);
@@ -4185,6 +4210,7 @@ $("#exportGedcom").onclick=()=>{
     const famc=famOfChild.get(p.id);if(famc)lines.push(`1 FAMC ${famc}`);
     if(p.birth||p.birthFull||p.birthPlace){lines.push("1 BIRT");const d=gedcomDateValue(p,"birth");if(d)lines.push(`2 DATE ${d}`);if(p.birthPlace)lines.push(`2 PLAC ${gedcomEscape(p.birthPlace)}`)}
     if(p.death||p.deathFull||p.deathPlace){lines.push("1 DEAT");const d=gedcomDateValue(p,"death");if(d)lines.push(`2 DATE ${d}`);if(p.deathPlace)lines.push(`2 PLAC ${gedcomEscape(p.deathPlace)}`)}
+    else if(p.deceased===true){lines.push("1 DEAT Y")}
     if(p.teip)lines.push(`1 NOTE Тейп: ${gedcomEscape(p.teip)}`);
     if(p.info)lines.push(`1 NOTE ${gedcomEscape(p.info.slice(0,80))}`);
     if(p.notes)lines.push(`1 NOTE ${gedcomEscape(p.notes.slice(0,200))}`);
@@ -4267,7 +4293,7 @@ function parseGedcom(text){
       else if(tag==="SEX")cur.sex=rest==="M"?"M":rest==="F"?"F":"U";
       else if(tag==="NOTE"){const v=(rest||"").trim();if(v.startsWith("Тейп:"))cur.teip=v.slice(5).trim().slice(0,120);else cur.notes+=(cur.notes?"\n":"")+v}
       else if(tag==="SOUR")cur.source+=(cur.source?"\n":"")+(rest||"").trim();
-      else if(tag==="BIRT"||tag==="DEAT")ctx=tag;
+      else if(tag==="BIRT"||tag==="DEAT"){ctx=tag;if(tag==="DEAT"&&rest&&rest.trim()==="Y")cur.deceased=true;}
       else if(tag==="UID")cur.uid=(rest||"").trim().toLowerCase().slice(0,36);
       else if(tag==="FAMC"){/* link via fam */}
       else ctx=null;
@@ -4296,7 +4322,7 @@ function parseGedcom(text){
   if(!indis.size)throw Error("INDI-записи не найдены.");
   const x2id=new Map();let n=1;
   const people=[];
-  for(const [x,rec] of indis){x2id.set(x,n);people.push({...blankPerson(n),uid:UID_RE.test(rec.uid||"")?rec.uid:"",name:rec.name||"Без имени",sex:rec.sex,birth:rec.birth,death:rec.death,birthQ:rec.birthQ||"",birthQ2:rec.birthQ2??null,deathQ:rec.deathQ||"",deathQ2:rec.deathQ2??null,birthPlace:rec.birthPlace||"",deathPlace:rec.deathPlace||"",teip:rec.teip||"",notes:(rec.notes||"").slice(0,10000),source:(rec.source||"").slice(0,3000)});n++}
+  for(const [x,rec] of indis){x2id.set(x,n);people.push({...blankPerson(n),uid:UID_RE.test(rec.uid||"")?rec.uid:"",deceased:!!rec.deceased,name:rec.name||"Без имени",sex:rec.sex,birth:rec.birth,death:rec.death,birthQ:rec.birthQ||"",birthQ2:rec.birthQ2??null,deathQ:rec.deathQ||"",deathQ2:rec.deathQ2??null,birthPlace:rec.birthPlace||"",deathPlace:rec.deathPlace||"",teip:rec.teip||"",notes:(rec.notes||"").slice(0,10000),source:(rec.source||"").slice(0,3000)});n++}
   for(const f of fams.values()){
     const hid=f.husb&&x2id.has(f.husb)?x2id.get(f.husb):null;
     const wid=f.wife&&x2id.has(f.wife)?x2id.get(f.wife):null;
