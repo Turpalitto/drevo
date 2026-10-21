@@ -685,10 +685,11 @@ function applySecurityHeaders(res) {
   res.setHeader("Referrer-Policy", "same-origin");
   res.setHeader("X-Frame-Options", "DENY");
   // Скрипт и стили встроены в index.html, поэтому 'unsafe-inline' обязателен.
+  // Разрешаем blob: для предпросмотра фото (Image) и воспроизведения аудио (Audio).
   res.setHeader(
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
   );
 }
 
@@ -702,7 +703,7 @@ function requestIsHttps(req) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://x");
-    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+    if ((req.method === "GET" || req.method === "HEAD") && (url.pathname === "/" || url.pathname === "/index.html")) {
       applySecurityHeaders(res);
       if (req.headers["if-none-match"] === INDEX_ETAG) {
         res.writeHead(304, { ETag: INDEX_ETAG, "Cache-Control": "no-cache" });
@@ -719,17 +720,20 @@ const server = http.createServer(async (req, res) => {
       };
       if (variant) headers["Content-Encoding"] = variant[0];
       res.writeHead(200, headers);
+      if (req.method === "HEAD") return res.end();
       return res.end(body);
     }
-    if (req.method === "GET" && url.pathname === "/healthz") {
+    if ((req.method === "GET" || req.method === "HEAD") && url.pathname === "/healthz") {
       // Проверяем не только факт запуска, но и работоспособность БД (чтение/запись).
       try {
         const probe = kvSet("healthz-probe", "ok");
         if (probe !== "ok") throw Error("kv write mismatch");
         kvGet("healthz-probe");
         kvDelete("healthz-probe");
+        if (req.method === "HEAD") return res.end();
         return sendJson(res, 200, { ok: true });
       } catch (e) {
+        if (req.method === "HEAD") return res.end();
         return sendJson(res, 503, { ok: false, error: "database unavailable" });
       }
     }
@@ -819,6 +823,12 @@ const server = http.createServer(async (req, res) => {
         const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
         if (!invite.userId && !name) return sendJson(res, 400, { error: "Укажите имя." });
 
+        // С2: Атомарное погашение приглашения для предотвращения гонок
+        const claim = db.prepare("UPDATE invites SET usedAt=? WHERE token_hash=? AND usedAt IS NULL").run(Date.now(), hash);
+        if (claim.changes === 0) {
+          return sendJson(res, 409, { error: "Приглашение уже использовано или отозвано." });
+        }
+
         let userId = invite.userId;
         let role = invite.role;
         let userName = name;
@@ -837,11 +847,6 @@ const server = http.createServer(async (req, res) => {
           db.prepare("INSERT INTO users(id,name,role,createdAt,lastSeenAt) VALUES(?,?,?,?,?)").run(userId, name, invite.role, Date.now(), Date.now());
         }
 
-        // С2: Атомарное погашение приглашения для предотвращения гонок
-        const claim = db.prepare("UPDATE invites SET usedAt=? WHERE token_hash=? AND usedAt IS NULL").run(Date.now(), hash);
-        if (claim.changes === 0) {
-          return sendJson(res, 409, { error: "Приглашение уже использовано или отозвано." });
-        }
         const token = newSession({ id: userId, role });
         res.setHeader("Set-Cookie", sessionCookie(req, token));
         return sendJson(res, 200, { ok: true, role, name: userName });
@@ -849,10 +854,15 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 405, { error: "method" });
     }
 
+    // С1: всё, что не в /api/, отсекаем с 404 до обращения к user.role
+    if (!url.pathname.startsWith("/api/")) {
+      applySecurityHeaders(res);
+      return sendJson(res, 404, { error: "not found" });
+    }
+
     // everything below requires session
     const user = sessionUser(req, res);
-    const needAuth = url.pathname.startsWith("/api/");
-    if (needAuth && !user) return sendJson(res, 401, { error: "auth" });
+    if (!user) return sendJson(res, 401, { error: "auth" });
     const isKeeper = user.role === "keeper";
     const canEdit = user.role === "keeper" || user.role === "editor";
     const deny = (res2) => sendJson(res2, 403, { error: "Недостаточно прав для этого действия." });
@@ -1038,10 +1048,11 @@ const server = http.createServer(async (req, res) => {
       const expiresAt = Date.now() + 7 * 24 * 3600 * 1000;
       db.prepare("INSERT INTO invites(token_hash,role,note,createdAt,expiresAt,createdBy) VALUES(?,?,?,?,?,?)")
         .run(hash, role, note, Date.now(), expiresAt, user.id);
-      const origin = `${req.headers["x-forwarded-proto"] || "http"}://${req.headers.host}`;
+      const proto = (req.headers["x-forwarded-proto"] || "").split(",")[0].trim() || (requestIsHttps(req) ? "https" : "http");
+      const origin = `${proto}://${req.headers.host}`;
       return sendJson(res, 201, { ok: true, url: `${origin}/?invite=${token}`, role, expiresAt });
     }
-        if (url.pathname === "/api/access/relogin" && req.method === "POST") {
+    if (url.pathname === "/api/access/relogin" && req.method === "POST") {
       if (!isKeeper) return deny(res);
       let body = {};
       try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }

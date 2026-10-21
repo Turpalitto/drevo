@@ -68,7 +68,12 @@ async function launch() {
   await send("Log.enable");
   return {
     child, ws, send, events, sleep,
-    close: async () => { try { ws.close(); } catch (e) {} child.kill("SIGKILL"); fs.rmSync(userDir, { recursive: true, force: true }); },
+    close: async () => {
+      try { ws.close(); } catch (e) {}
+      try { child.kill("SIGKILL"); } catch (e) {}
+      await sleep(100);
+      try { fs.rmSync(userDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch (e) {}
+    },
   };
 }
 

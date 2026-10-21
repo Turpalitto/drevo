@@ -4,8 +4,8 @@
 const { test, before, after } = require("node:test");
 const assert = require("node:assert");
 const { spawn } = require("node:child_process");
-const fs = require("node:fs");
 const { DatabaseSync } = require("node:sqlite");
+const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 
@@ -333,10 +333,54 @@ test("нельзя отозвать единственного хранител�
   assert.equal(selfDemote.status, 400, "нельзя понизить самого себя");
 });
 
-test("К1: сессия старше 30 дней без активности возвращает 401", async () => {
-  const activeKeeper = (await json(await call("/api/me", { cookie: keeper }))).role === "keeper" ? keeper : viewer;
+test("С1: пути вне /api/ и без сессии дают 404/200 без 500, CSP содержит blob", async () => {
+  const resRobots = await call("/robots.txt");
+  assert.equal(resRobots.status, 404);
+  const csp = resRobots.headers.get("content-security-policy") || "";
+  assert.ok(csp.includes("img-src 'self' data: blob:"), "CSP разрешает blob: в картинках");
+  assert.ok(csp.includes("media-src 'self' blob:"), "CSP разрешает blob: в медиа");
+
+  const resHead = await fetch(BASE + "/", { method: "HEAD" });
+  assert.equal(resHead.status, 200, "HEAD / поддерживается");
+});
+
+test("К2: новый хранитель может восстановить права владельца пароля (owner)", async () => {
+  // viewer сейчас хранитель, owner — редактор
+  const restoreRes = await call("/api/access/role", {
+    method: "POST", cookie: viewer,
+    body: JSON.stringify({ userId: "owner", role: "keeper" }),
+  });
+  assert.equal(restoreRes.status, 200, "роль owner успешно изменена");
+  const meOwner = await json(await call("/api/me", { cookie: keeper }));
+  assert.equal(meOwner.role, "keeper", "владелец пароля снова стал хранителем");
+});
+
+test("С2: одновременное принятие одного приглашения атомарно (защита от гонки)", async () => {
   const invRes = await call("/api/access/invite", {
-    method: "POST", cookie: activeKeeper,
+    method: "POST", cookie: keeper,
+    body: JSON.stringify({ role: "viewer", note: "Гонка" }),
+  });
+  assert.equal(invRes.status, 201);
+  const token = (await json(invRes)).url.split("invite=")[1];
+
+  // Запускаем 4 параллельных запроса на принятие одной ссылки
+  const parallel = await Promise.all([
+    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 1" }) }),
+    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 2" }) }),
+    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 3" }) }),
+    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 4" }) }),
+  ]);
+
+  const statuses = parallel.map((r) => r.status);
+  const successes = statuses.filter((s) => s === 200);
+  const conflicts = statuses.filter((s) => s === 409 || s === 410);
+  assert.equal(successes.length, 1, "ровно один запрос принят успешно");
+  assert.equal(conflicts.length, 3, "остальные параллельные запросы отклонены");
+});
+
+test("К1: сессия старше 30 дней без активности возвращает 401", async () => {
+  const invRes = await call("/api/access/invite", {
+    method: "POST", cookie: keeper,
     body: JSON.stringify({ role: "editor", note: "Срок" }),
   });
   const token = (await json(invRes)).url.split("invite=")[1];
@@ -357,9 +401,8 @@ test("К1: сессия старше 30 дней без активности в�
 });
 
 test("К1: активная сессия продлевается со скользящим сроком", async () => {
-  const activeKeeper = (await json(await call("/api/me", { cookie: keeper }))).role === "keeper" ? keeper : viewer;
   const invRes = await call("/api/access/invite", {
-    method: "POST", cookie: activeKeeper,
+    method: "POST", cookie: keeper,
     body: JSON.stringify({ role: "editor", note: "Продление" }),
   });
   const token = (await json(invRes)).url.split("invite=")[1];
@@ -389,10 +432,9 @@ test("К1: активная сессия продлевается со скол�
 });
 
 test("К1: ссылка повторного входа (relogin) входит в того же userId без дублирования", async () => {
-  const activeKeeper = (await json(await call("/api/me", { cookie: keeper }))).role === "keeper" ? keeper : viewer;
   // Создаём участника
   const invRes = await call("/api/access/invite", {
-    method: "POST", cookie: activeKeeper,
+    method: "POST", cookie: keeper,
     body: JSON.stringify({ role: "editor", note: "Первичный" }),
   });
   const token1 = (await json(invRes)).url.split("invite=")[1];
@@ -411,7 +453,7 @@ test("К1: ссылка повторного входа (relogin) входит �
 
   // Хранитель генерирует ссылку повторного входа для Хасана через /api/access/relogin
   const reinvRes = await call("/api/access/relogin", {
-    method: "POST", cookie: activeKeeper,
+    method: "POST", cookie: keeper,
     body: JSON.stringify({ userId: hasanId }),
   });
   assert.equal(reinvRes.status, 201);
@@ -435,16 +477,15 @@ test("К1: ссылка повторного входа (relogin) входит �
   assert.equal(meReinv.name, "Хасан");
 
   // В списке участников Хасан только один
-  const accessRes = await json(await call("/api/access", { cookie: activeKeeper }));
+  const accessRes = await json(await call("/api/access", { cookie: keeper }));
   const hasanEntries = accessRes.users.filter((u) => u.name === "Хасан");
   assert.equal(hasanEntries.length, 1, "в users нет дубликатов Хасана");
 });
 
 test("К1: отозванный участник по relogin-ссылке не входит", async () => {
-  const activeKeeper = (await json(await call("/api/me", { cookie: keeper }))).role === "keeper" ? keeper : viewer;
   // Создаём участника
   const invRes = await call("/api/access/invite", {
-    method: "POST", cookie: activeKeeper,
+    method: "POST", cookie: keeper,
     body: JSON.stringify({ role: "viewer", note: "На отзыв" }),
   });
   const token1 = (await json(invRes)).url.split("invite=")[1];
@@ -456,7 +497,7 @@ test("К1: отозванный участник по relogin-ссылке не 
 
   // Выпускаем relogin-ссылку до отзыва
   const reloginRes = await call("/api/access/relogin", {
-    method: "POST", cookie: activeKeeper,
+    method: "POST", cookie: keeper,
     body: JSON.stringify({ userId: zaurId }),
   });
   assert.equal(reloginRes.status, 201);
@@ -464,14 +505,14 @@ test("К1: отозванный участник по relogin-ссылке не 
 
   // Хранитель отзывает Заура
   const revokeRes = await call("/api/access/revoke", {
-    method: "POST", cookie: activeKeeper,
+    method: "POST", cookie: keeper,
     body: JSON.stringify({ userId: zaurId }),
   });
   assert.equal(revokeRes.status, 200);
 
   // Новая попытка выпустить relogin для отозванного даёт 404
   const reloginAfterRevoke = await call("/api/access/relogin", {
-    method: "POST", cookie: activeKeeper,
+    method: "POST", cookie: keeper,
     body: JSON.stringify({ userId: zaurId }),
   });
   assert.equal(reloginAfterRevoke.status, 404);
@@ -483,36 +524,4 @@ test("К1: отозванный участник по relogin-ссылке не 
   assert.equal(acceptAttempt.status, 403, "отозванный участник не может войти по relogin");
 });
 
-test("К2: новый хранитель может восстановить права владельца пароля (owner)", async () => {
-  // viewer сейчас хранитель, owner — редактор (после теста передачи архива)
-  const restoreRes = await call("/api/access/role", {
-    method: "POST", cookie: viewer,
-    body: JSON.stringify({ userId: "owner", role: "keeper" }),
-  });
-  assert.equal(restoreRes.status, 200, "роль owner успешно изменена");
-  const meOwner = await json(await call("/api/me", { cookie: keeper }));
-  assert.equal(meOwner.role, "keeper", "владелец пароля снова стал хранителем");
-});
 
-test("С2: одновременное принятие одного приглашения атомарно (защита от гонки)", async () => {
-  const activeKeeper = (await json(await call("/api/me", { cookie: keeper }))).role === "keeper" ? keeper : viewer;
-  const invRes = await call("/api/access/invite", {
-    method: "POST", cookie: activeKeeper,
-    body: JSON.stringify({ role: "viewer", note: "Гонка" }),
-  });
-  const token = (await json(invRes)).url.split("invite=")[1];
-
-  // 4 одновременных запроса на принятие одного и того же приглашения
-  const parallel = await Promise.all([
-    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 1" }) }),
-    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 2" }) }),
-    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 3" }) }),
-    call(`/api/invite/${token}/accept`, { method: "POST", body: JSON.stringify({ name: "Клон 4" }) }),
-  ]);
-
-  const statuses = parallel.map((r) => r.status);
-  const successes = statuses.filter((s) => s === 200);
-  const conflicts = statuses.filter((s) => s === 409 || s === 410);
-  assert.equal(successes.length, 1, "ровно один запрос принят успешно");
-  assert.equal(conflicts.length, 3, "остальные параллельные запросы отклонены");
-});
