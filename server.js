@@ -67,6 +67,13 @@ function applyMigrations(targetDb) {
         CREATE INDEX IF NOT EXISTS idx_users_role ON users(role, revokedAt);
       `);
     },
+    // v4: Ссылки повторного входа (re-entry) для существующих участников
+    (d) => {
+      const cols = d.prepare("PRAGMA table_info(invites)").all().map((c) => c.name);
+      if (!cols.includes("userId")) {
+        d.exec("ALTER TABLE invites ADD COLUMN userId TEXT");
+      }
+    },
   ];
 
   for (let i = currentVersion; i < migrations.length; i++) {
@@ -506,20 +513,32 @@ function newSession(user = { id: "owner", role: "keeper" }) {
   db.prepare("INSERT INTO sessions(token,createdAt,userId,role) VALUES(?,?,?,?)").run(token, Date.now(), user.id, user.role);
   return token;
 }
-function sessionUser(req) {
+function sessionUser(req, res) {
   const token = parseCookies(req).korni_session;
   if (!token) return null;
   const row = db.prepare("SELECT createdAt,userId,role FROM sessions WHERE token=?").get(token);
   if (!row) return null;
-  if (Date.now() - row.createdAt > SESSION_TTL_MS) {
+  const now = Date.now();
+  if (now - row.createdAt > SESSION_TTL_MS) {
     db.prepare("DELETE FROM sessions WHERE token=?").run(token);
     return null;
   }
+  // Скользящая сессия: продлеваем активную сессию и обновляем cookie, если прошло более 24 часов
+  if (now - row.createdAt > 24 * 3600 * 1000) {
+    db.prepare("UPDATE sessions SET createdAt=? WHERE token=?").run(now, token);
+    if (res && typeof res.setHeader === "function") {
+      res.setHeader("Set-Cookie", sessionCookie(req, token));
+    }
+  }
   if (!row.userId || row.userId === "owner") return { id: "owner", name: "Хранитель", role: ownerRole(), token };
-  const user = db.prepare("SELECT name,role,revokedAt FROM users WHERE id=?").get(row.userId);
+  const user = db.prepare("SELECT name,role,lastSeenAt,revokedAt FROM users WHERE id=?").get(row.userId);
   if (!user || user.revokedAt) {
     db.prepare("DELETE FROM sessions WHERE token=?").run(token);
     return null;
+  }
+  // Обновляем визит участника не чаще раза в час
+  if (now - (user.lastSeenAt || 0) > 3600 * 1000) {
+    db.prepare("UPDATE users SET lastSeenAt=? WHERE id=?").run(now, row.userId);
   }
   if (user.role !== row.role) db.prepare("UPDATE sessions SET role=? WHERE token=?").run(user.role, token);
   return { id: row.userId, name: user.name, role: user.role, token };
@@ -783,25 +802,51 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 410, { error: "Приглашение недействительно или истекло." });
       }
       if (!accept && req.method === "GET") {
-        return sendJson(res, 200, { ok: true, role: invite.role, note: invite.note || "", title: getArchive().title, roles: ROLE_TITLES });
+        let existingName = "";
+        if (invite.userId) {
+          const u = db.prepare("SELECT name FROM users WHERE id=?").get(invite.userId);
+          if (u) existingName = u.name;
+        }
+        return sendJson(res, 200, {
+          ok: true, role: invite.role, note: invite.note || "",
+          title: getArchive().title, roles: ROLE_TITLES,
+          isReentry: !!invite.userId, userName: existingName,
+        });
       }
       if (accept && req.method === "POST") {
         let body = {};
         try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
         const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
-        if (!name) return sendJson(res, 400, { error: "Укажите имя." });
-        const userId = crypto.randomUUID();
-        db.prepare("INSERT INTO users(id,name,role,createdAt,lastSeenAt) VALUES(?,?,?,?,?)").run(userId, name, invite.role, Date.now(), Date.now());
+        if (!invite.userId && !name) return sendJson(res, 400, { error: "Укажите имя." });
+
+        let userId = invite.userId;
+        let role = invite.role;
+        let userName = name;
+
+        if (userId) {
+          const existing = db.prepare("SELECT id, name, role, revokedAt FROM users WHERE id=?").get(userId);
+          if (!existing || existing.revokedAt) {
+            return sendJson(res, 403, { error: "Доступ участника был отозван." });
+          }
+          userName = existing.name;
+          role = existing.role;
+          db.prepare("UPDATE users SET lastSeenAt=? WHERE id=?").run(Date.now(), userId);
+        } else {
+          userId = crypto.randomUUID();
+          userName = name;
+          db.prepare("INSERT INTO users(id,name,role,createdAt,lastSeenAt) VALUES(?,?,?,?,?)").run(userId, name, invite.role, Date.now(), Date.now());
+        }
+
         db.prepare("UPDATE invites SET usedAt=? WHERE token_hash=?").run(Date.now(), hash);
-        const token = newSession({ id: userId, role: invite.role });
+        const token = newSession({ id: userId, role });
         res.setHeader("Set-Cookie", sessionCookie(req, token));
-        return sendJson(res, 200, { ok: true, role: invite.role, name });
+        return sendJson(res, 200, { ok: true, role, name: userName });
       }
       return sendJson(res, 405, { error: "method" });
     }
 
     // everything below requires session
-    const user = sessionUser(req);
+    const user = sessionUser(req, res);
     const needAuth = url.pathname.startsWith("/api/");
     if (needAuth && !user) return sendJson(res, 401, { error: "auth" });
     const isKeeper = user.role === "keeper";
@@ -962,8 +1007,8 @@ const server = http.createServer(async (req, res) => {
       if (!isKeeper) return deny(res);
       const users = db.prepare("SELECT id,name,role,createdAt,lastSeenAt,revokedAt FROM users ORDER BY createdAt ASC").all()
         .map((u) => ({ id: u.id, name: u.name, role: u.role, createdAt: u.createdAt, lastSeenAt: u.lastSeenAt, revoked: !!u.revokedAt }));
-      const invites = db.prepare("SELECT token_hash,role,note,createdAt,expiresAt,usedAt FROM invites ORDER BY createdAt DESC LIMIT 20").all()
-        .map((i) => ({ id: i.token_hash, role: i.role, note: i.note || "", createdAt: i.createdAt, expiresAt: i.expiresAt, used: (i.usedAt || 0) > 0, revoked: i.usedAt === -1 }));
+      const invites = db.prepare("SELECT token_hash,role,note,createdAt,expiresAt,usedAt,userId FROM invites ORDER BY createdAt DESC LIMIT 20").all()
+        .map((i) => ({ id: i.token_hash, role: i.role, note: i.note || "", createdAt: i.createdAt, expiresAt: i.expiresAt, used: (i.usedAt || 0) > 0, revoked: i.usedAt === -1, userId: i.userId || null }));
       return sendJson(res, 200, { users, invites, visibility: accessSettings(), roles: ROLE_TITLES, owner: "Хранитель", ownerRole: ownerRole() });
     }
     if (url.pathname === "/api/access/revoke-invite" && req.method === "POST") {
@@ -991,6 +1036,22 @@ const server = http.createServer(async (req, res) => {
         .run(hash, role, note, Date.now(), expiresAt, user.id);
       const origin = `${req.headers["x-forwarded-proto"] || "http"}://${req.headers.host}`;
       return sendJson(res, 201, { ok: true, url: `${origin}/?invite=${token}`, role, expiresAt });
+    }
+        if (url.pathname === "/api/access/relogin" && req.method === "POST") {
+      if (!isKeeper) return deny(res);
+      let body = {};
+      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      if (typeof body.userId !== "string" || !body.userId.trim()) return sendJson(res, 400, { error: "bad userId" });
+      const targetUser = db.prepare("SELECT id, name, role, revokedAt FROM users WHERE id=?").get(body.userId.trim());
+      if (!targetUser || targetUser.revokedAt) return sendJson(res, 404, { error: "Участник не найден или его доступ отозван." });
+      const token = crypto.randomBytes(24).toString("hex");
+      const hash = crypto.createHash("sha256").update(token).digest("hex");
+      const expiresAt = Date.now() + 7 * 24 * 3600 * 1000;
+      db.prepare("INSERT INTO invites(token_hash,role,note,createdAt,expiresAt,createdBy,userId) VALUES(?,?,?,?,?,?,?)")
+        .run(hash, targetUser.role, "Повторный вход", Date.now(), expiresAt, user.id, targetUser.id);
+      const proto = (req.headers["x-forwarded-proto"] || "").split(",")[0].trim() || (requestIsHttps(req) ? "https" : "http");
+      const origin = `${proto}://${req.headers.host}`;
+      return sendJson(res, 201, { ok: true, url: `${origin}/?invite=${token}`, role: targetUser.role, expiresAt, userId: targetUser.id });
     }
     if (url.pathname === "/api/access/revoke" && req.method === "POST") {
       if (!isKeeper) return deny(res);

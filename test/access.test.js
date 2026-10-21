@@ -5,6 +5,7 @@ const { test, before, after } = require("node:test");
 const assert = require("node:assert");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
+const { DatabaseSync } = require("node:sqlite");
 const path = require("node:path");
 const os = require("node:os");
 
@@ -13,6 +14,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const PASSWORD = "тест-доступ-42";
 
 let server = null;
+let testDataDir = "";
 let keeper = "";      // cookie хранителя (семейный пароль)
 let editor = "";      // cookie редактора
 let viewer = "";      // cookie наблюдателя
@@ -22,8 +24,8 @@ let editorInvite = "";
 let viewerInvite = "";
 
 function startServer() {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "korni-access-"));
-  const env = { ...process.env, KORNI_PASSWORD: PASSWORD, DATA_DIR: dataDir, PORT: String(PORT) };
+  testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "korni-access-"));
+  const env = { ...process.env, KORNI_PASSWORD: PASSWORD, DATA_DIR: testDataDir, PORT: String(PORT) };
   server = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], { env, stdio: "pipe" });
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error("сервер не запустился за 10с")), 10000);
@@ -329,4 +331,154 @@ test("нельзя отозвать единственного хранител�
 
   const selfDemote = await call("/api/access/role", { method: "POST", cookie: viewer, body: JSON.stringify({ userId: meRes.id, role: "editor" }) });
   assert.equal(selfDemote.status, 400, "нельзя понизить самого себя");
+});
+
+test("К1: сессия старше 30 дней без активности возвращает 401", async () => {
+  const activeKeeper = (await json(await call("/api/me", { cookie: keeper }))).role === "keeper" ? keeper : viewer;
+  const invRes = await call("/api/access/invite", {
+    method: "POST", cookie: activeKeeper,
+    body: JSON.stringify({ role: "editor", note: "Срок" }),
+  });
+  const token = (await json(invRes)).url.split("invite=")[1];
+  const acceptRes = await call(`/api/invite/${token}/accept`, {
+    method: "POST", body: JSON.stringify({ name: "Идрис" }),
+  });
+  assert.equal(acceptRes.status, 200);
+  const cookieIdris = cookieOf(acceptRes);
+  const sessionToken = cookieIdris.split("=")[1];
+
+  // Состариваем сессию на 31 день в базе
+  const db = new DatabaseSync(path.join(testDataDir, "korni.db"));
+  db.prepare("UPDATE sessions SET createdAt=? WHERE token=?").run(Date.now() - 31 * 24 * 3600 * 1000, sessionToken);
+  db.close();
+
+  const meExpired = await call("/api/me", { cookie: cookieIdris });
+  assert.equal(meExpired.status, 401, "сессия старше 30 дней аннулирована");
+});
+
+test("К1: активная сессия продлевается со скользящим сроком", async () => {
+  const activeKeeper = (await json(await call("/api/me", { cookie: keeper }))).role === "keeper" ? keeper : viewer;
+  const invRes = await call("/api/access/invite", {
+    method: "POST", cookie: activeKeeper,
+    body: JSON.stringify({ role: "editor", note: "Продление" }),
+  });
+  const token = (await json(invRes)).url.split("invite=")[1];
+  const acceptRes = await call(`/api/invite/${token}/accept`, {
+    method: "POST", body: JSON.stringify({ name: "Али" }),
+  });
+  assert.equal(acceptRes.status, 200);
+  const cookieAli = cookieOf(acceptRes);
+  const sessionToken = cookieAli.split("=")[1];
+
+  // Прошло 25 часов с момента создания сессии
+  const db = new DatabaseSync(path.join(testDataDir, "korni.db"));
+  const agedTime = Date.now() - 25 * 3600 * 1000;
+  db.prepare("UPDATE sessions SET createdAt=? WHERE token=?").run(agedTime, sessionToken);
+  db.close();
+
+  // Делаем запрос: сессия активна и должна продлиться
+  const res = await call("/api/me", { cookie: cookieAli });
+  assert.equal(res.status, 200);
+  const setCookie = res.headers.get("set-cookie") || "";
+  assert.ok(setCookie.includes("Max-Age="), "сервер выставил обновлённый cookie");
+
+  const db2 = new DatabaseSync(path.join(testDataDir, "korni.db"));
+  const row = db2.prepare("SELECT createdAt FROM sessions WHERE token=?").get(sessionToken);
+  db2.close();
+  assert.ok(row.createdAt > agedTime, "время сессии в БД сдвинулось вперёд");
+});
+
+test("К1: ссылка повторного входа (relogin) входит в того же userId без дублирования", async () => {
+  const activeKeeper = (await json(await call("/api/me", { cookie: keeper }))).role === "keeper" ? keeper : viewer;
+  // Создаём участника
+  const invRes = await call("/api/access/invite", {
+    method: "POST", cookie: activeKeeper,
+    body: JSON.stringify({ role: "editor", note: "Первичный" }),
+  });
+  const token1 = (await json(invRes)).url.split("invite=")[1];
+  const acceptRes = await call(`/api/invite/${token1}/accept`, {
+    method: "POST", body: JSON.stringify({ name: "Хасан" }),
+  });
+  assert.equal(acceptRes.status, 200);
+  const cookieHas = cookieOf(acceptRes);
+  const meHas = await json(await call("/api/me", { cookie: cookieHas }));
+  const hasanId = meHas.id;
+  assert.ok(hasanId, "получен ID участника");
+
+  // Участник выходит
+  const logoutRes = await call("/api/logout", { method: "POST", cookie: cookieHas });
+  assert.equal(logoutRes.status, 200);
+
+  // Хранитель генерирует ссылку повторного входа для Хасана через /api/access/relogin
+  const reinvRes = await call("/api/access/relogin", {
+    method: "POST", cookie: activeKeeper,
+    body: JSON.stringify({ userId: hasanId }),
+  });
+  assert.equal(reinvRes.status, 201);
+  const reinvData = await json(reinvRes);
+  assert.equal(reinvData.userId, hasanId);
+  const token2 = reinvData.url.split("invite=")[1];
+
+  // Проверяем инфо об инвайте
+  const checkReinv = await json(await call(`/api/invite/${token2}`));
+  assert.equal(checkReinv.isReentry, true);
+  assert.equal(checkReinv.userName, "Хасан");
+
+  // Принимаем повторный вход (имя не обязательно, сессия существующего участника)
+  const acceptReinv = await call(`/api/invite/${token2}/accept`, {
+    method: "POST", body: JSON.stringify({}),
+  });
+  assert.equal(acceptReinv.status, 200);
+  const cookieReinv = cookieOf(acceptReinv);
+  const meReinv = await json(await call("/api/me", { cookie: cookieReinv }));
+  assert.equal(meReinv.id, hasanId, "ID участника сохранился");
+  assert.equal(meReinv.name, "Хасан");
+
+  // В списке участников Хасан только один
+  const accessRes = await json(await call("/api/access", { cookie: activeKeeper }));
+  const hasanEntries = accessRes.users.filter((u) => u.name === "Хасан");
+  assert.equal(hasanEntries.length, 1, "в users нет дубликатов Хасана");
+});
+
+test("К1: отозванный участник по relogin-ссылке не входит", async () => {
+  const activeKeeper = (await json(await call("/api/me", { cookie: keeper }))).role === "keeper" ? keeper : viewer;
+  // Создаём участника
+  const invRes = await call("/api/access/invite", {
+    method: "POST", cookie: activeKeeper,
+    body: JSON.stringify({ role: "viewer", note: "На отзыв" }),
+  });
+  const token1 = (await json(invRes)).url.split("invite=")[1];
+  const acceptRes = await call(`/api/invite/${token1}/accept`, {
+    method: "POST", body: JSON.stringify({ name: "Заур" }),
+  });
+  const cookieZaur = cookieOf(acceptRes);
+  const zaurId = (await json(await call("/api/me", { cookie: cookieZaur }))).id;
+
+  // Выпускаем relogin-ссылку до отзыва
+  const reloginRes = await call("/api/access/relogin", {
+    method: "POST", cookie: activeKeeper,
+    body: JSON.stringify({ userId: zaurId }),
+  });
+  assert.equal(reloginRes.status, 201);
+  const reloginToken = (await json(reloginRes)).url.split("invite=")[1];
+
+  // Хранитель отзывает Заура
+  const revokeRes = await call("/api/access/revoke", {
+    method: "POST", cookie: activeKeeper,
+    body: JSON.stringify({ userId: zaurId }),
+  });
+  assert.equal(revokeRes.status, 200);
+
+  // Новая попытка выпустить relogin для отозванного даёт 404
+  const reloginAfterRevoke = await call("/api/access/relogin", {
+    method: "POST", cookie: activeKeeper,
+    body: JSON.stringify({ userId: zaurId }),
+  });
+  assert.equal(reloginAfterRevoke.status, 404);
+
+  // Попытка принять ранее выданную relogin-ссылку даёт 403
+  const acceptAttempt = await call(`/api/invite/${reloginToken}/accept`, {
+    method: "POST", body: JSON.stringify({}),
+  });
+  assert.equal(acceptAttempt.status, 403, "отозванный участник не может войти по relogin");
 });

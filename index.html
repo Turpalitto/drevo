@@ -3517,6 +3517,9 @@ function renderAccess(){
       select.value=user.role;
       select.onchange=()=>changeRole(user,select);
       row.append(select);
+      const reinvite=document.createElement("button");reinvite.type="button";reinvite.textContent="Ссылка для входа";
+      reinvite.onclick=()=>reloginUser(user,reinvite);
+      row.append(reinvite);
       if(user.role!=="keeper"){
         const transfer=document.createElement("button");transfer.type="button";transfer.textContent="Передать архив";
         transfer.onclick=()=>transferArchive(user);row.append(transfer);
@@ -3577,6 +3580,22 @@ async function revokeInvite(inv,btn){
     if(!r.ok)throw Error(result.error||"Не удалось отозвать приглашение.");
     notify("Приглашение отозвано.");await loadAccess();
   }catch(err){notify(err.message);btn.disabled=false}
+}
+async function reloginUser(user,btn){
+  btn.disabled=true;
+  try{
+    const r=await fetch("/api/access/relogin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:user.id})});
+    const result=await r.json().catch(()=>({}));
+    if(!r.ok)throw Error(result.error||"Не удалось создать ссылку для входа.");
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(result.url).catch(()=>{});
+      notify(`Ссылка для входа участника «${user.name}» скопирована в буфер.`);
+    }else{
+      prompt("Ссылка для входа участника «"+user.name+"»:",result.url);
+    }
+    await loadAccess();
+  }catch(err){notify(err.message)}
+  finally{btn.disabled=false}
 }
 async function changeRole(user,select){
   const previous=user.role;
@@ -3704,10 +3723,21 @@ async function startInvite(token){
     const info=await r.json().catch(()=>({}));
     if(!r.ok)throw Error(info.error||"Приглашение недействительно.");
     $("#inviteTitle").textContent=info.title||"Семейный архив";
-    $("#inviteIntro").textContent=`Вас пригласили в семейный архив с ролью «${(info.roles||{})[info.role]||info.role}». ${info.role==="editor"?"Изменения будет подтверждать хранитель.":"Вы сможете читать архив, но не менять записи."}${info.note?" Пометка: "+info.note+".":""}`;
+    const submitBtn=$("#inviteAcceptForm button[type='submit']");
+    if(info.isReentry){
+      $("#inviteIntro").textContent=`Повторный вход в семейный архив: «${info.userName}» (${(info.roles||{})[info.role]||info.role}).`;
+      $("#inviteName").value=info.userName||"";
+      $("#inviteName").readOnly=true;
+      if(submitBtn)submitBtn.textContent="Войти в архив";
+    }else{
+      $("#inviteIntro").textContent=`Вас пригласили в семейный архив с ролью «${(info.roles||{})[info.role]||info.role}». ${info.role==="editor"?"Изменения будет подтверждать хранитель.":"Вы сможете читать архив, но не менять записи."}${info.note?" Пометка: "+info.note+".":""}`;
+      $("#inviteName").value="";
+      $("#inviteName").readOnly=false;
+      if(submitBtn)submitBtn.textContent="Принять приглашение";
+    }
     $("#bootStatus").hidden=true;
     $("#inviteDialog").showModal();
-    setTimeout(()=>$("#inviteName").focus(),60);
+    setTimeout(()=>info.isReentry&&submitBtn?submitBtn.focus():$("#inviteName").focus(),60);
   }catch(err){
     $("#bootStatus").hidden=true;
     $("#empty").hidden=false;
@@ -3723,7 +3753,7 @@ $("#inviteAcceptForm").onsubmit=async e=>{
   const name=$("#inviteName").value.trim();
   if(!name){$("#inviteError").textContent="Укажите имя.";return}
   const button=e.currentTarget.querySelector('button[type="submit"]');
-  button.disabled=true;button.textContent="Присоединяемся…";
+  button.disabled=true;button.textContent="Входим…";
   try{
     const r=await fetch(`/api/invite/${encodeURIComponent(token)}/accept`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
     const result=await r.json().catch(()=>({}));
@@ -3731,7 +3761,7 @@ $("#inviteAcceptForm").onsubmit=async e=>{
     location.replace("/");
   }catch(err){
     $("#inviteError").textContent=err.message;
-    button.disabled=false;button.textContent="Принять приглашение";
+    button.disabled=false;button.textContent=$("#inviteName").readOnly?"Войти в архив":"Принять приглашение";
   }
 };
 function plural(n,one,few,many){const m=n%100;if(m>=11&&m<=14)return many;const d=n%10;if(d===1)return one;if(d>=2&&d<=4)return few;return many}
@@ -4356,6 +4386,10 @@ $("#loginForm").onsubmit=async e=>{
   }catch(err){$("#loginError").textContent="Нет связи с сервером."}
 };
 $("#logoutButton").onclick=async ()=>{
+  if(me && me.id !== "owner"){
+    const ok = await ask("После выхода войти снова можно только по новой ссылке от хранителя. Завершить сессию?", "Выход из общей базы");
+    if(!ok) return;
+  }
   try{await fetch("/api/logout",{method:"POST"})}catch(e){notify("Не удалось завершить сессию на сервере: нет связи. Перезагрузите страницу и повторите выход.")}
   await clearAllMedia();
   await clearStorageDb();
