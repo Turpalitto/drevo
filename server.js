@@ -718,15 +718,15 @@ const INDEX_ETAG = etagOf(INDEX);
 const INDEX_VARIANTS = buildVariants(INDEX);
 
 // Статику читаем с диска один раз: файлы в assets/ не меняются на ходу.
+// Несуществующие имена не кэшируются, чтобы кэш не раздувался от случайных запросов.
 const assetCache = new Map();
 function loadAsset(name) {
   if (assetCache.has(name)) return assetCache.get(name);
+  if (!ASSET_RE.test(name)) return null;
   const file = path.join(ASSETS_DIR, name);
-  let entry = null;
-  if (ASSET_RE.test(name) && fs.existsSync(file)) {
-    const buf = fs.readFileSync(file);
-    entry = { buf, etag: etagOf(buf), type: ASSET_TYPES[path.extname(name).toLowerCase()] || "application/octet-stream" };
-  }
+  if (!fs.existsSync(file)) return null;
+  const buf = fs.readFileSync(file);
+  const entry = { buf, etag: etagOf(buf), type: ASSET_TYPES[path.extname(name).toLowerCase()] || "application/octet-stream" };
   assetCache.set(name, entry);
   return entry;
 }

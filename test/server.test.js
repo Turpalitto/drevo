@@ -73,6 +73,36 @@ test("индексная страница отдаётся с security-заго�
   assert.ok((await res.text()).includes("Корни"));
 });
 
+test("С5: кэширование в assetCache только существующих файлов", async () => {
+  const probeName = "temp-probe-c5.jpg";
+  const probePath = path.join(__dirname, "..", "assets", probeName);
+  try { if (fs.existsSync(probePath)) fs.unlinkSync(probePath); } catch (_) {}
+
+  try {
+    // 1. Запрос к несуществующему файлу возвращает 404
+    const res1 = await fetch(BASE + `/assets/${probeName}`);
+    assert.equal(res1.status, 404);
+
+    // 2. Создаём файл на диске
+    fs.writeFileSync(probePath, "probe-content-for-c5");
+
+    // 3. Несуществующий файл не кэшировался, поэтому новый запрос возвращает 200
+    const res2 = await fetch(BASE + `/assets/${probeName}`);
+    assert.equal(res2.status, 200);
+    assert.equal(await res2.text(), "probe-content-for-c5");
+
+    // 4. Удаляем файл с диска
+    fs.unlinkSync(probePath);
+
+    // 5. Найденный файл был закэширован в памяти, поэтому продолжает отдаваться 200
+    const res3 = await fetch(BASE + `/assets/${probeName}`);
+    assert.equal(res3.status, 200);
+    assert.equal(await res3.text(), "probe-content-for-c5");
+  } finally {
+    try { if (fs.existsSync(probePath)) fs.unlinkSync(probePath); } catch (_) {}
+  }
+});
+
 test("неверный и верный пароль, cookie-сессия", async () => {
   const bad = await api("/api/login", { method: "POST", body: JSON.stringify({ password: "не-то" }) });
   assert.equal(bad.status, 401);
