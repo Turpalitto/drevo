@@ -482,3 +482,14 @@ test("К1: отозванный участник по relogin-ссылке не 
   });
   assert.equal(acceptAttempt.status, 403, "отозванный участник не может войти по relogin");
 });
+
+test("К2: новый хранитель может восстановить права владельца пароля (owner)", async () => {
+  // viewer сейчас хранитель, owner — редактор (после теста передачи архива)
+  const restoreRes = await call("/api/access/role", {
+    method: "POST", cookie: viewer,
+    body: JSON.stringify({ userId: "owner", role: "keeper" }),
+  });
+  assert.equal(restoreRes.status, 200, "роль owner успешно изменена");
+  const meOwner = await json(await call("/api/me", { cookie: keeper }));
+  assert.equal(meOwner.role, "keeper", "владелец пароля снова стал хранителем");
+});

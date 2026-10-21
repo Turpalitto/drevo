@@ -1077,6 +1077,15 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { error: "Хранитель не может понизить сам себя. Используйте передачу архива." });
       }
       if (body.role === "keeper" && body.userId === user.id) return sendJson(res, 400, { error: "Вы уже хранитель." });
+
+      if (body.userId === "owner") {
+        if (body.role !== "keeper" && activeKeeperCount() <= 1 && ownerRole() === "keeper") {
+          return sendJson(res, 400, { error: "Нельзя лишить архив единственного хранителя." });
+        }
+        kvSet("owner_role", body.role);
+        return sendJson(res, 200, { ok: true, ownerRole: body.role });
+      }
+
       const target = db.prepare("SELECT role, revokedAt FROM users WHERE id=?").get(body.userId);
       if (!target || target.revokedAt) return sendJson(res, 404, { error: "Участник не найден." });
       if (target.role === "keeper" && body.role !== "keeper" && activeKeeperCount() <= 1) {

@@ -3500,9 +3500,18 @@ function renderAccess(){
   usersBox.replaceChildren();
   const owner=document.createElement("div");owner.className="access-row";
   const ownerWho=document.createElement("div");ownerWho.className="who";
-  const ob=document.createElement("b");ob.textContent="Хранитель · семейный пароль";
+  const ob=document.createElement("b");ob.textContent="Хранитель (семейный пароль)";
   const os=document.createElement("span");os.textContent="Вход по общему паролю. Роль: "+roleLabel(accessData.ownerRole||"keeper");
-  ownerWho.append(ob,os);owner.append(ownerWho);usersBox.append(owner);
+  ownerWho.append(ob,os);owner.append(ownerWho);
+  if(me.role==="keeper"){
+    const ownerSelect=document.createElement("select");
+    ownerSelect.setAttribute("aria-label","Роль владельца пароля");
+    for(const [value,title] of Object.entries(accessData.roles||{}))ownerSelect.append(new Option(title,value));
+    ownerSelect.value=accessData.ownerRole||"keeper";
+    ownerSelect.onchange=()=>changeRole({id:"owner",name:"Владелец пароля",role:accessData.ownerRole||"keeper"},ownerSelect);
+    owner.append(ownerSelect);
+  }
+  usersBox.append(owner);
   for(const user of accessData.users){
     const row=document.createElement("div");row.className="access-row";
     const who=document.createElement("div");who.className="who";
