@@ -31,9 +31,121 @@ const db = new DatabaseSync(path.join(DATA_DIR, "korni.db"));
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA synchronous = NORMAL;");
 db.exec("PRAGMA busy_timeout = 5000;");
-db.exec(`CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);
-CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY, createdAt INTEGER);
-CREATE TABLE IF NOT EXISTS contributions(id TEXT PRIMARY KEY, createdAt INTEGER, status TEXT, payload TEXT);`);
+// Версионирование схемы базы данных через PRAGMA user_version.
+// Позволяет накатывать миграции шаг за шагом в транзакциях и сохранять
+// целостность данных между релизами сервера.
+function applyMigrations(targetDb) {
+  const currentVersion = targetDb.prepare("PRAGMA user_version").get().user_version;
+  const migrations = [
+    // v1: Базовые таблицы архива, сессий и заявок
+    (d) => {
+      d.exec(`
+        CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY, createdAt INTEGER, userId TEXT, role TEXT);
+        CREATE TABLE IF NOT EXISTS contributions(id TEXT PRIMARY KEY, createdAt INTEGER, status TEXT, payload TEXT);
+      `);
+      const cols = d.prepare("PRAGMA table_info(sessions)").all().map((c) => c.name);
+      for (const [name, type] of [["userId", "TEXT"], ["role", "TEXT"]]) {
+        if (!cols.includes(name)) d.exec(`ALTER TABLE sessions ADD COLUMN ${name} ${type}`);
+      }
+    },
+    // v2: Этап 5 — участники, одноразовые приглашения, предложения правок и история
+    (d) => {
+      d.exec(`
+        CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, createdAt INTEGER NOT NULL, lastSeenAt INTEGER, revokedAt INTEGER);
+        CREATE TABLE IF NOT EXISTS invites(token_hash TEXT PRIMARY KEY, role TEXT NOT NULL, note TEXT, createdAt INTEGER NOT NULL, expiresAt INTEGER NOT NULL, usedAt INTEGER, createdBy TEXT);
+        CREATE TABLE IF NOT EXISTS proposals(id TEXT PRIMARY KEY, createdAt INTEGER NOT NULL, authorId TEXT, authorName TEXT, summary TEXT, baseRev INTEGER, status TEXT NOT NULL, payload TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY AUTOINCREMENT, personId INTEGER NOT NULL, at INTEGER NOT NULL, authorId TEXT, authorName TEXT, action TEXT, before TEXT, after TEXT);
+      `);
+    },
+    // v3: Индексы для производительности истории, предложений и проверок доступа
+    (d) => {
+      d.exec(`
+        CREATE INDEX IF NOT EXISTS idx_history_person ON history(personId, at);
+        CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status, createdAt);
+        CREATE INDEX IF NOT EXISTS idx_invites_active ON invites(expiresAt, usedAt);
+        CREATE INDEX IF NOT EXISTS idx_users_role ON users(role, revokedAt);
+      `);
+    },
+  ];
+
+  for (let i = currentVersion; i < migrations.length; i++) {
+    const nextVer = i + 1;
+    targetDb.exec("BEGIN IMMEDIATE;");
+    try {
+      migrations[i](targetDb);
+      targetDb.exec(`PRAGMA user_version = ${nextVer};`);
+      targetDb.exec("COMMIT;");
+    } catch (e) {
+      targetDb.exec("ROLLBACK;");
+      throw new Error(`Ошибка миграции схемы БД до v${nextVer}: ${e.message}`);
+    }
+  }
+  return targetDb.prepare("PRAGMA user_version").get().user_version;
+}
+applyMigrations(db);
+
+const ROLES = ["keeper", "editor", "viewer"];
+const ROLE_TITLES = { keeper: "хранитель", editor: "редактор", viewer: "просмотр" };
+// Роль владельца семейного пароля. После передачи архива он становится
+// редактором: иначе передача ничего бы не значила — пароль возвращал бы права.
+function ownerRole() {
+  const value = kvGet("owner_role");
+  return value === "editor" || value === "viewer" ? value : "keeper";
+}
+function activeKeeperCount() {
+  const ownerIsKeeper = ownerRole() === "keeper" ? 1 : 0;
+  const userKeepers = db.prepare("SELECT COUNT(*) AS c FROM users WHERE role='keeper' AND revokedAt IS NULL").get().c;
+  return ownerIsKeeper + userKeepers;
+}
+// Видимость для всех, кроме хранителя. По умолчанию сведения о живых скрыты:
+// семейный архив не должен раскрывать даты и места жизни человека без его согласия.
+const DEFAULT_VISIBILITY = { living: true, photos: false, memories: false };
+function accessSettings() {
+  try {
+    const raw = JSON.parse(kvGet("access_settings") || "null");
+    if (!raw || typeof raw !== "object") return { ...DEFAULT_VISIBILITY };
+    return {
+      living: raw.living !== false,
+      photos: raw.photos === true,
+      memories: raw.memories === true,
+    };
+  } catch (e) {
+    return { ...DEFAULT_VISIBILITY };
+  }
+}
+function setAccessSettings(next) {
+  const value = { living: next.living !== false, photos: next.photos === true, memories: next.memories === true };
+  kvSet("access_settings", JSON.stringify(value));
+  return value;
+}
+// Поля, которые не отдаём тем, кому закрыты сведения о живых.
+const MASKED_FIELDS = [
+  "birth", "death", "birthFull", "deathFull", "birthQ", "birthQ2", "deathQ", "deathQ2",
+  "birthPlace", "deathPlace", "birthPlaceNow", "deathPlaceNow", "teip", "tukhum",
+  "occupation", "residence", "info", "notes", "source", "photo", "photoMeta",
+  "events", "sources", "memories", "documents", "unions",
+];
+function filterPerson(person, role) {
+  if (!person || typeof person !== "object" || role === "keeper") return person;
+  const v = accessSettings();
+  if (!v.living && !v.photos && !v.memories) return person;
+  const copy = JSON.parse(JSON.stringify(person));
+  if (v.living && isLiving(copy)) {
+    for (const key of MASKED_FIELDS) delete copy[key];
+    copy.masked = true;
+  }
+  if (v.photos) { delete copy.photo; delete copy.photoMeta; }
+  if (v.memories) delete copy.memories;
+  return copy;
+}
+// Отдаём копию: фильтрация не должна менять архив в базе.
+function filterArchive(archive, role) {
+  if (role === "keeper") return archive;
+  const copy = JSON.parse(JSON.stringify(archive));
+  copy.people = (copy.people || []).map((p) => filterPerson(p, role));
+  return copy;
+}
 
 function freshArchive() {
   return { format: "korni-local", version: 1, rev: 1, title: "Моя родословная", demo: false, log: [], people: [] };
@@ -115,6 +227,88 @@ function setArchive(a) {
   backupDaily(a);
 }
 
+// --- история изменений по человеку ---
+// Храним снимок «до» и «после»: этого достаточно, чтобы показать автору и
+// времени, что именно изменилось, и вернуть прежние данные.
+const HISTORY_LIMIT = 5000;
+function recordHistory(entries) {
+  if (!entries.length) return;
+  const stmt = db.prepare("INSERT INTO history(personId,at,authorId,authorName,action,before,after) VALUES(?,?,?,?,?,?,?)");
+  for (const e of entries) {
+    stmt.run(e.personId, e.at, e.authorId || "", e.authorName || "", e.action || "edit",
+      e.before == null ? null : JSON.stringify(e.before), e.after == null ? null : JSON.stringify(e.after));
+  }
+  const count = db.prepare("SELECT COUNT(*) AS n FROM history").get().n;
+  if (count > HISTORY_LIMIT) {
+    const cut = db.prepare("SELECT id FROM history ORDER BY id DESC LIMIT 1 OFFSET ?").get(HISTORY_LIMIT);
+    if (cut) db.prepare("DELETE FROM history WHERE id <= ?").run(cut.id);
+  }
+}
+const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function changedFields(before, after) {
+  const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
+  return [...keys].filter((k) => !sameValue(before?.[k], after?.[k]));
+}
+// Разница двух архивов на уровне людей: добавлен / изменён / удалён.
+function diffPeople(before, after) {
+  const map = new Map((before || []).map((p) => [p.id, p])), out = [], seen = new Set();
+  for (const p of after || []) {
+    seen.add(p.id);
+    const old = map.get(p.id);
+    if (!old) out.push({ op: "add", id: p.id, before: null, after: p });
+    else if (!sameValue(old, p)) out.push({ op: "edit", id: p.id, before: old, after: p });
+  }
+  for (const p of before || []) if (!seen.has(p.id)) out.push({ op: "remove", id: p.id, before: p, after: null });
+  return out;
+}
+// Применяем предложенные изменения к текущему архиву. Меняем только те поля,
+// которые человек действительно правил: скрытые от него данные не затираются.
+function applyPatches(archive, patches) {
+  const conflicts = [], applied = [];
+  for (const patch of patches) {
+    if (!patch || !Number.isSafeInteger(patch.id)) { conflicts.push({ id: null, reason: "bad" }); continue; }
+    if (patch.op === "add") {
+      if (archive.people.some((p) => p.id === patch.id)) { conflicts.push({ id: patch.id, reason: "exists" }); continue; }
+      archive.people.push(patch.after);
+      applied.push({ id: patch.id, action: "add", before: null, after: patch.after });
+      continue;
+    }
+    const idx = archive.people.findIndex((p) => p.id === patch.id);
+    if (idx < 0) { conflicts.push({ id: patch.id, reason: "missing" }); continue; }
+    if (patch.op === "remove") {
+      const removed = archive.people.splice(idx, 1)[0];
+      // Снимаем ссылки на удалённого: иначе архив не пройдёт проверку связей.
+      for (const p of archive.people) {
+        if (p.father === patch.id) p.father = null;
+        if (p.mother === patch.id) p.mother = null;
+        if (Array.isArray(p.spouses)) p.spouses = p.spouses.filter((s) => s !== patch.id);
+        if (Array.isArray(p.unions)) p.unions = p.unions.filter((u) => u.spouse !== patch.id);
+      }
+      applied.push({ id: patch.id, action: "remove", before: removed, after: null });
+      continue;
+    }
+    const current = archive.people[idx];
+    const fields = changedFields(patch.before, patch.after);
+    const changed = fields.filter((k) => !sameValue(current[k], patch.before?.[k]));
+    if (changed.length) { conflicts.push({ id: patch.id, reason: "changed", fields: changed }); continue; }
+    const next = { ...current };
+    for (const k of fields) next[k] = patch.after?.[k];
+    archive.people[idx] = next;
+    applied.push({ id: patch.id, action: "edit", before: current, after: next });
+  }
+  return { conflicts, applied };
+}
+function saveApplied(archive, applied, author, summary) {
+  archive.rev = (archive.rev || 1) + 1;
+  archive.log = [{ at: new Date().toISOString(), text: summary }, ...(Array.isArray(archive.log) ? archive.log : [])].slice(0, 100);
+  checkArchive(archive);
+  setArchive(archive);
+  recordHistory(applied.map((a) => ({
+    personId: a.id, at: Date.now(), authorId: author.id, authorName: author.name,
+    action: a.action, before: a.before, after: a.after,
+  })));
+}
+
 // --- ежедневные автоматические копии архива ---
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 const KEEP_BACKUPS = 30;
@@ -122,21 +316,26 @@ let lastBackupDay = "";
 function sqlQuote(value) {
   return "'" + String(value).replace(/'/g, "''") + "'";
 }
+function setBackupStatus(status) {
+  try { kvSet("backup_status", JSON.stringify(status)); } catch (e) { /* статус не важнее самой копии */ }
+}
 function backupDaily(archive) {
   if (!archive || !Array.isArray(archive.people) || archive.people.length === 0) return;
+  const day = new Date().toISOString().slice(0, 10);
   try {
-    const day = new Date().toISOString().slice(0, 10);
     if (day === lastBackupDay) return; // сегодня уже сохранили
     fs.mkdirSync(BACKUPS_DIR, { recursive: true });
     fs.writeFileSync(path.join(BACKUPS_DIR, `korni-${day}.json`), JSON.stringify(archive, null, 2));
     // Плюс согласованный снимок всей базы (архив, сессии, заявки) одним файлом:
     // VACUUM INTO безопаснее копирования файла на живой базе.
     const dbFile = path.join(BACKUPS_DIR, `korni-${day}.db`);
-    if (!fs.existsSync(dbFile)) { // VACUUM INTO не перезаписывает существующий файл
-      try { db.exec(`VACUUM INTO ${sqlQuote(dbFile)}`); }
+    let dbOk = fs.existsSync(dbFile);
+    if (!dbOk) { // VACUUM INTO не перезаписывает существующий файл
+      try { db.exec(`VACUUM INTO ${sqlQuote(dbFile)}`); dbOk = fs.existsSync(dbFile); }
       catch (e) { console.warn("Не удалось снять снимок базы:", e.message); }
     }
     lastBackupDay = day;
+    setBackupStatus({ at: new Date().toISOString(), day, ok: true, people: archive.people.length, db: dbOk });
     // Ротация по датам: у одного дня может быть и .json, и .db.
     const days = [...new Set(fs.readdirSync(BACKUPS_DIR)
       .filter((f) => /^korni-\d{4}-\d{2}-\d{2}\.(json|db)$/.test(f))
@@ -150,6 +349,7 @@ function backupDaily(archive) {
     }
   } catch (e) {
     console.warn("Не удалось сделать ежедневную копию:", e.message);
+    setBackupStatus({ at: new Date().toISOString(), ok: false, error: e.message });
   }
 }
 function contributionToken() {
@@ -176,7 +376,7 @@ function checkContribution(v) {
 function personFromContribution(v, archive) {
   const id = Math.max(0, ...archive.people.map((p) => p.id)) + 1;
   const source = [`Предложено: ${v.submittedBy.trim()}`, v.contact.trim() && `Контакт: ${v.contact.trim()}`].filter(Boolean).join(" · ");
-  return { id, uid: crypto.randomUUID(), name: v.name.trim(), native: "", sex: v.sex, teip: "", birth: v.birth, death: null, father: null, mother: null, tukhum: "", notes: v.notes.trim(), source, birthFull: "", deathFull: "", birthPlace: v.birthPlace.trim(), deathPlace: "", photo: "", info: v.info.trim().slice(0, 80), spouses: [] };
+  return { id, uid: crypto.randomUUID(), name: v.name.trim(), native: "", nameVariants: "", sex: v.sex, teip: "", birth: v.birth, death: null, father: null, mother: null, tukhum: "", notes: v.notes.trim(), source, birthFull: "", deathFull: "", birthPlace: v.birthPlace.trim(), deathPlace: "", photo: "", info: v.info.trim().slice(0, 80), occupation: "", residence: "", spouses: [], events: [], sources: [], memories: [] };
 }
 
 // --- validation (same rules as client) ---
@@ -189,8 +389,54 @@ function validatePeople(people) {
     ids.add(p.id); map.set(p.id, p);
     if (typeof p.name !== "string" || !p.name.trim() || p.name.length > 180) throw Error("bad name");
     if (!["M", "F", "U"].includes(p.sex)) throw Error("bad sex");
-    for (const [key, max] of [["native", 180], ["teip", 120], ["tukhum", 120], ["notes", 10000], ["source", 3000], ["birthPlace", 120], ["deathPlace", 120], ["info", 80]]) {
+    for (const [key, max] of [["native", 180], ["nameVariants", 300], ["teip", 120], ["tukhum", 120], ["notes", 10000], ["source", 3000], ["birthPlace", 120], ["deathPlace", 120], ["birthPlaceNow", 120], ["deathPlaceNow", 120], ["occupation", 180], ["residence", 300], ["info", 80]]) {
+      // Поля, добавленные позже, могут отсутствовать в старых архивах.
+      if (p[key] === undefined && ["nameVariants", "occupation", "residence", "birthPlaceNow", "deathPlaceNow"].includes(key)) continue;
       if (typeof p[key] !== "string" || p[key].length > max) throw Error("bad " + key);
+    }
+    // Дополнительные разделы необязательны: старые архивы приходят без них.
+    const sectionRules = [
+      ["events", 100, [["date", 40, false], ["title", 120, true], ["place", 120, false], ["note", 500, false]]],
+      ["sources", 50, [["title", 200, true], ["note", 1000, false]]],
+      ["memories", 50, [["text", 5000, false], ["author", 120, false], ["at", 40, false]]],
+      ["documents", 30, [["title", 200, true], ["date", 40, false], ["note", 500, false], ["mediaId", 60, false], ["fileName", 200, false], ["fileType", 100, false], ["eventId", 40, false]]],
+    ];
+    for (const [key, limit, checks] of sectionRules) {
+      const list = p[key];
+      if (list === undefined) continue;
+      if (!Array.isArray(list) || list.length > limit) throw Error("bad " + key);
+      for (const item of list) {
+        if (!item || typeof item !== "object") throw Error("bad " + key);
+        for (const [field, max, required] of checks) {
+          if (typeof item[field] !== "string" || item[field].length > max || (required && !item[field].trim())) throw Error("bad " + key + "." + field);
+        }
+        if (key === "sources" && !["document", "oral", "assumption", "other"].includes(item.kind)) throw Error("bad source kind");
+        // Воспоминание без текста допустимо, только если есть аудиозапись.
+        if (key === "memories") {
+          const audio = item.audio;
+          if (audio !== undefined && audio !== null) {
+            if (typeof audio !== "object" || typeof audio.mediaId !== "string" || !audio.mediaId.trim()) throw Error("bad memory audio");
+          }
+          if (!String(item.text || "").trim() && !(audio && audio.mediaId)) throw Error("bad memory text");
+        }
+      }
+    }
+    // Точность даты: второй год только у интервала и не раньше первого.
+    for (const key of ["birth", "death"]) {
+      const qual = p[key + "Q"], second = p[key + "Q2"];
+      if (qual !== undefined && qual !== "" && !["exact", "abt", "bef", "aft", "between"].includes(qual)) throw Error("bad date quality");
+      if (second !== undefined && second !== null) {
+        if (qual !== "between") throw Error("bad date quality");
+        if (!Number.isInteger(second) || second < 1 || second > year || (p[key] && second < p[key])) throw Error("bad date range");
+      }
+    }
+    if (p.photoMeta !== undefined && p.photoMeta !== null) {
+      const meta = p.photoMeta;
+      if (typeof meta !== "object") throw Error("bad photo meta");
+      for (const [key, max] of [["caption", 300], ["date", 40], ["source", 300], ["mediaId", 60]]) {
+        if (typeof meta[key] !== "string" || meta[key].length > max) throw Error("bad photo meta." + key);
+      }
+      if (!Array.isArray(meta.people) || meta.people.some((x) => !Number.isSafeInteger(x))) throw Error("bad photo people");
     }
     // uid — необязательный стабильный идентификатор (GEDCOM 7 UID) в формате UUID.
     if (p.uid !== undefined && p.uid !== null && p.uid !== "" && (typeof p.uid !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(p.uid))) {
@@ -209,6 +455,15 @@ function validatePeople(people) {
     if (p.deathFull && p.death !== null && Number(p.deathFull.slice(0, 4)) !== p.death) throw Error("year/date mismatch");
     if (p.birth && p.death && p.death < p.birth) throw Error("death before birth");
     if (!Array.isArray(p.spouses)) throw Error("bad spouses");
+    if (p.unions !== undefined) {
+      if (!Array.isArray(p.unions) || p.unions.length > 20) throw Error("bad unions");
+      for (const u of p.unions) {
+        if (!u || !Number.isSafeInteger(u.spouse) || !p.spouses.includes(u.spouse)) throw Error("bad union");
+        for (const [key, max] of [["from", 20], ["to", 20], ["note", 300]]) {
+          if (typeof u[key] !== "string" || u[key].length > max) throw Error("bad union." + key);
+        }
+      }
+    }
   }
   const degree = new Map(), children = new Map(people.map((p) => [p.id, []]));
   for (const p of people) {
@@ -244,10 +499,30 @@ function checkArchive(v) {
 }
 
 // --- sessions ---
-function newSession() {
+// Сессия помнит, кто вошёл и с какой ролью. Роль читается из users при каждом
+// запросе: отзыв доступа и смена роли действуют сразу, без перелогина.
+function newSession(user = { id: "owner", role: "keeper" }) {
   const token = crypto.randomBytes(32).toString("hex");
-  db.prepare("INSERT INTO sessions(token,createdAt) VALUES(?,?)").run(token, Date.now());
+  db.prepare("INSERT INTO sessions(token,createdAt,userId,role) VALUES(?,?,?,?)").run(token, Date.now(), user.id, user.role);
   return token;
+}
+function sessionUser(req) {
+  const token = parseCookies(req).korni_session;
+  if (!token) return null;
+  const row = db.prepare("SELECT createdAt,userId,role FROM sessions WHERE token=?").get(token);
+  if (!row) return null;
+  if (Date.now() - row.createdAt > SESSION_TTL_MS) {
+    db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+    return null;
+  }
+  if (!row.userId || row.userId === "owner") return { id: "owner", name: "Хранитель", role: ownerRole(), token };
+  const user = db.prepare("SELECT name,role,revokedAt FROM users WHERE id=?").get(row.userId);
+  if (!user || user.revokedAt) {
+    db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+    return null;
+  }
+  if (user.role !== row.role) db.prepare("UPDATE sessions SET role=? WHERE token=?").run(user.role, token);
+  return { id: row.userId, name: user.name, role: user.role, token };
 }
 function validSession(token) {
   if (!token) return false;
@@ -258,6 +533,11 @@ function validSession(token) {
     return false;
   }
   return true;
+}
+function sessionCookie(req, token) {
+  const cookieAttrs = `HttpOnly; Path=/; SameSite=Lax; Max-Age=${30 * 24 * 3600}`;
+  const secureAttr = (requestIsHttps(req) && !("localhost" === req.headers.host?.split(":")[0])) ? "; Secure" : "";
+  return `korni_session=${token}; ${cookieAttrs}${secureAttr}`;
 }
 function clearSessions() {
   db.prepare("DELETE FROM sessions WHERE createdAt < ?").run(Date.now() - SESSION_TTL_MS);
@@ -485,17 +765,48 @@ const server = http.createServer(async (req, res) => {
       if (!passwordHash || !body.password || !verifyPassword(body.password, passwordHash)) {
         return sendJson(res, 401, { error: "Неверный пароль." });
       }
-      const token = newSession();
-      const cookieAttrs = `HttpOnly; Path=/; SameSite=Lax; Max-Age=${30 * 24 * 3600}`;
-      const secureAttr = (requestIsHttps(req) && !("localhost" === req.headers.host?.split(":")[0])) ? "; Secure" : "";
-      res.setHeader("Set-Cookie", `korni_session=${token}; ${cookieAttrs}${secureAttr}`);
-      return sendJson(res, 200, { ok: true });
+      const role = ownerRole();
+      const token = newSession({ id: "owner", role });
+      res.setHeader("Set-Cookie", sessionCookie(req, token));
+      return sendJson(res, 200, { ok: true, role, name: "Хранитель" });
+    }
+
+    // --- персональное приглашение ---
+    // Ссылка одноразовая, живёт 7 дней. Принявший её получает собственную сессию
+    // и роль; семейный пароль ему не передаётся.
+    const inviteMatch = url.pathname.match(/^\/api\/invite\/([a-f0-9]{48})(\/accept)?$/);
+    if (inviteMatch) {
+      const [, rawToken, accept] = inviteMatch;
+      const hash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      const invite = db.prepare("SELECT * FROM invites WHERE token_hash=?").get(hash);
+      if (!invite || invite.usedAt || invite.expiresAt < Date.now()) {
+        return sendJson(res, 410, { error: "Приглашение недействительно или истекло." });
+      }
+      if (!accept && req.method === "GET") {
+        return sendJson(res, 200, { ok: true, role: invite.role, note: invite.note || "", title: getArchive().title, roles: ROLE_TITLES });
+      }
+      if (accept && req.method === "POST") {
+        let body = {};
+        try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+        const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
+        if (!name) return sendJson(res, 400, { error: "Укажите имя." });
+        const userId = crypto.randomUUID();
+        db.prepare("INSERT INTO users(id,name,role,createdAt,lastSeenAt) VALUES(?,?,?,?,?)").run(userId, name, invite.role, Date.now(), Date.now());
+        db.prepare("UPDATE invites SET usedAt=? WHERE token_hash=?").run(Date.now(), hash);
+        const token = newSession({ id: userId, role: invite.role });
+        res.setHeader("Set-Cookie", sessionCookie(req, token));
+        return sendJson(res, 200, { ok: true, role: invite.role, name });
+      }
+      return sendJson(res, 405, { error: "method" });
     }
 
     // everything below requires session
-    const authed = validSession(parseCookies(req).korni_session);
+    const user = sessionUser(req);
     const needAuth = url.pathname.startsWith("/api/");
-    if (needAuth && !authed) return sendJson(res, 401, { error: "auth" });
+    if (needAuth && !user) return sendJson(res, 401, { error: "auth" });
+    const isKeeper = user.role === "keeper";
+    const canEdit = user.role === "keeper" || user.role === "editor";
+    const deny = (res2) => sendJson(res2, 403, { error: "Недостаточно прав для этого действия." });
 
     if (url.pathname === "/api/logout" && req.method === "POST") {
       const t = parseCookies(req).korni_session;
@@ -503,24 +814,40 @@ const server = http.createServer(async (req, res) => {
       res.setHeader("Set-Cookie", "korni_session=; HttpOnly; Path=/; Max-Age=0");
       return sendJson(res, 200, { ok: true });
     }
-    if (url.pathname === "/api/me" && req.method === "GET") return sendJson(res, 200, { ok: true, mode: "server" });
+    if (url.pathname === "/api/me" && req.method === "GET") {
+      return sendJson(res, 200, {
+        ok: true, mode: "server", role: user.role, name: user.name, id: user.id,
+        canEdit, canReview: isKeeper, visibility: accessSettings(), roles: ROLE_TITLES,
+      });
+    }
     if (url.pathname === "/api/rev" && req.method === "GET") {
       return sendJson(res, 200, { rev: getArchive().rev || 1 });
     }
+    // Статус последней автоматической копии: интерфейс показывает его в «Управлении»,
+    // чтобы сбой копирования не остался незамеченным.
+    if (url.pathname === "/api/backup-status" && req.method === "GET") {
+      if (!isKeeper) return deny(res);
+      let status = null;
+      try { status = JSON.parse(kvGet("backup_status") || "null"); } catch (e) { status = null; }
+      const schemaVersion = db.prepare("PRAGMA user_version").get().user_version;
+      return sendJson(res, 200, { status, schemaVersion });
+    }
     if (url.pathname === "/api/archive" && req.method === "GET") {
-      return sendJson(res, 200, getArchive());
+      return sendJson(res, 200, filterArchive(getArchive(), user.role));
     }
     if (url.pathname === "/api/archive" && req.method === "PUT") {
+      if (!isKeeper) return deny(res);
       let body;
       try { body = JSON.parse(await readBody(req)); }
       catch (e) { return sendJson(res, 400, { error: "Некорректный JSON." }); }
       const cur = getArchive();
       if (!Number.isSafeInteger(body.baseRev) || body.baseRev !== (cur.rev || 1)) {
-        return sendJson(res, 409, { error: "Архив изменился. Обновите страницу.", current: cur });
+        return sendJson(res, 409, { error: "Архив изменился. Обновите страницу.", current: filterArchive(cur, user.role) });
       }
       try { checkArchive(body.archive); }
       catch (e) { return sendJson(res, 400, { error: "Проверка не пройдена." }); }
       const next = body.archive;
+      const patches = diffPeople(cur.people, next.people);
       next.rev = (cur.rev || 1) + 1;
       next.log = Array.isArray(next.log)
         ? next.log.slice(0, 100).map((x) => ({
@@ -529,18 +856,208 @@ const server = http.createServer(async (req, res) => {
           }))
         : [];
       setArchive(next);
+      // История пишется на каждое изменение человека. Массовый импорт в историю
+      // не попадает: сотни записей «добавлен» только засорят её.
+      if (patches.length <= 100) {
+        recordHistory(patches.map((p) => ({
+          personId: p.id, at: Date.now(), authorId: user.id, authorName: user.name,
+          action: p.op === "add" ? "add" : p.op === "remove" ? "remove" : "edit",
+          before: p.before, after: p.after,
+        })));
+      }
       return sendJson(res, 200, { ok: true, rev: next.rev });
     }
+
+    // --- предложенные изменения (редактор → хранитель) ---
+    if (url.pathname === "/api/proposals" && req.method === "POST") {
+      if (!canEdit) return deny(res);
+      let body;
+      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "Некорректный JSON." }); }
+      const patches = Array.isArray(body.patches) ? body.patches.slice(0, 300) : [];
+      if (!patches.length) return sendJson(res, 400, { error: "Нет изменений." });
+      for (const p of patches) {
+        if (!p || !Number.isSafeInteger(p.id) || !["add", "edit", "remove"].includes(p.op)) return sendJson(res, 400, { error: "Некорректное изменение." });
+        if (p.op !== "remove" && (!p.after || typeof p.after !== "object")) return sendJson(res, 400, { error: "Некорректное изменение." });
+      }
+      const summary = typeof body.summary === "string" ? body.summary.slice(0, 300) : "Изменение";
+      const id = crypto.randomBytes(12).toString("hex");
+      db.prepare("INSERT INTO proposals(id,createdAt,authorId,authorName,summary,baseRev,status,payload) VALUES(?,?,?,?,?,?,?,?)")
+        .run(id, Date.now(), user.id, user.name, summary, Number(body.baseRev) || 0, "pending", JSON.stringify({ patches }));
+      return sendJson(res, 201, { ok: true, id });
+    }
+    if (url.pathname === "/api/proposals" && req.method === "GET") {
+      const rows = isKeeper
+        ? db.prepare("SELECT * FROM proposals WHERE status='pending' ORDER BY createdAt ASC").all()
+        : db.prepare("SELECT * FROM proposals WHERE status='pending' AND authorId=? ORDER BY createdAt DESC").all(user.id);
+      return sendJson(res, 200, {
+        proposals: rows.map((row) => ({
+          id: row.id, at: row.createdAt, author: row.authorName, authorId: row.authorId,
+          summary: row.summary, baseRev: row.baseRev, status: row.status,
+          patches: JSON.parse(row.payload).patches,
+        })),
+      });
+    }
+    const proposalAction = url.pathname.match(/^\/api\/proposals\/([a-f0-9]{24})\/(approve|reject)$/);
+    if (proposalAction && req.method === "POST") {
+      if (!isKeeper) return deny(res);
+      const [, id, action] = proposalAction;
+      const row = db.prepare("SELECT * FROM proposals WHERE id=?").get(id);
+      if (!row || row.status !== "pending") return sendJson(res, 404, { error: "Предложение уже обработано." });
+      if (action === "reject") {
+        db.prepare("UPDATE proposals SET status='rejected' WHERE id=?").run(id);
+        return sendJson(res, 200, { ok: true });
+      }
+      const patches = JSON.parse(row.payload).patches;
+      const archive = getArchive();
+      const { conflicts, applied } = applyPatches(archive, patches);
+      if (conflicts.length) return sendJson(res, 409, { error: "Данные изменились после отправки. Отклоните предложение и попросите повторить.", conflicts });
+      try { saveApplied(archive, applied, { id: row.authorId, name: row.authorName }, `Принято предложение: ${row.summary}`); }
+      catch (e) { return sendJson(res, 409, { error: "Изменение противоречит данным архива. Проверьте связи вручную." }); }
+      db.prepare("UPDATE proposals SET status='approved' WHERE id=?").run(id);
+      return sendJson(res, 200, { ok: true, rev: archive.rev, applied: applied.length });
+    }
+    const proposalWithdraw = url.pathname.match(/^\/api\/proposals\/([a-f0-9]{24})$/);
+    if (proposalWithdraw && req.method === "DELETE") {
+      const id = proposalWithdraw[1];
+      const row = db.prepare("SELECT authorId,status FROM proposals WHERE id=?").get(id);
+      if (!row || row.status !== "pending") return sendJson(res, 404, { error: "Предложение не найдено." });
+      if (!isKeeper && row.authorId !== user.id) return deny(res);
+      db.prepare("UPDATE proposals SET status='withdrawn' WHERE id=?").run(id);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    // --- история изменений по человеку ---
+    if (url.pathname === "/api/history" && req.method === "GET") {
+      if (!canEdit) return deny(res);
+      const personId = Number(url.searchParams.get("personId"));
+      if (!Number.isSafeInteger(personId)) return sendJson(res, 400, { error: "bad person" });
+      const rows = db.prepare("SELECT * FROM history WHERE personId=? ORDER BY id DESC LIMIT 40").all(personId);
+      return sendJson(res, 200, {
+        history: rows.map((row) => ({
+          id: row.id, at: row.at, author: row.authorName || "—", action: row.action,
+          before: row.before ? filterPerson(JSON.parse(row.before), user.role) : null,
+          after: row.after ? filterPerson(JSON.parse(row.after), user.role) : null,
+        })),
+      });
+    }
+    const restoreMatch = url.pathname.match(/^\/api\/history\/(\d+)\/restore$/);
+    if (restoreMatch && req.method === "POST") {
+      if (!isKeeper) return deny(res);
+      const row = db.prepare("SELECT * FROM history WHERE id=?").get(Number(restoreMatch[1]));
+      if (!row) return sendJson(res, 404, { error: "Запись не найдена." });
+      const archive = getArchive();
+      const idx = archive.people.findIndex((p) => p.id === row.personId);
+      const target = row.before ? JSON.parse(row.before) : null;
+      if (!target) return sendJson(res, 409, { error: "Для этой записи нет прежней версии." });
+      if (idx < 0) return sendJson(res, 409, { error: "Человек удалён из архива." });
+      const before = archive.people[idx];
+      archive.people[idx] = { ...target };
+      try { saveApplied(archive, [{ id: row.personId, action: "restore", before, after: target }], user, `Возвращена прежняя версия записи`); }
+      catch (e) { return sendJson(res, 409, { error: "Прежняя версия противоречит текущим связям. Проверьте вручную." }); }
+      return sendJson(res, 200, { ok: true, rev: archive.rev });
+    }
+
+    // --- доступ: пользователи, приглашения, видимость ---
+    if (url.pathname === "/api/access" && req.method === "GET") {
+      if (!isKeeper) return deny(res);
+      const users = db.prepare("SELECT id,name,role,createdAt,lastSeenAt,revokedAt FROM users ORDER BY createdAt ASC").all()
+        .map((u) => ({ id: u.id, name: u.name, role: u.role, createdAt: u.createdAt, lastSeenAt: u.lastSeenAt, revoked: !!u.revokedAt }));
+      const invites = db.prepare("SELECT token_hash,role,note,createdAt,expiresAt,usedAt FROM invites ORDER BY createdAt DESC LIMIT 20").all()
+        .map((i) => ({ id: i.token_hash, role: i.role, note: i.note || "", createdAt: i.createdAt, expiresAt: i.expiresAt, used: (i.usedAt || 0) > 0, revoked: i.usedAt === -1 }));
+      return sendJson(res, 200, { users, invites, visibility: accessSettings(), roles: ROLE_TITLES, owner: "Хранитель", ownerRole: ownerRole() });
+    }
+    if (url.pathname === "/api/access/revoke-invite" && req.method === "POST") {
+      if (!isKeeper) return deny(res);
+      let body = {};
+      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      if (typeof body.id !== "string") return sendJson(res, 400, { error: "bad invite id" });
+      const inv = db.prepare("SELECT usedAt FROM invites WHERE token_hash=?").get(body.id);
+      if (!inv) return sendJson(res, 404, { error: "Приглашение не найдено." });
+      if (inv.usedAt) return sendJson(res, 409, { error: "Приглашение уже использовано или отозвано." });
+      db.prepare("UPDATE invites SET usedAt=-1 WHERE token_hash=?").run(body.id);
+      return sendJson(res, 200, { ok: true });
+    }
+    if (url.pathname === "/api/access/invite" && req.method === "POST") {
+      if (!isKeeper) return deny(res);
+      let body = {};
+      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      const role = ROLES.includes(body.role) ? body.role : "viewer";
+      if (role === "keeper") return sendJson(res, 400, { error: "Второго хранителя назначают из списка участников." });
+      const token = crypto.randomBytes(24).toString("hex");
+      const hash = crypto.createHash("sha256").update(token).digest("hex");
+      const note = typeof body.note === "string" ? body.note.trim().slice(0, 120) : "";
+      const expiresAt = Date.now() + 7 * 24 * 3600 * 1000;
+      db.prepare("INSERT INTO invites(token_hash,role,note,createdAt,expiresAt,createdBy) VALUES(?,?,?,?,?,?)")
+        .run(hash, role, note, Date.now(), expiresAt, user.id);
+      const origin = `${req.headers["x-forwarded-proto"] || "http"}://${req.headers.host}`;
+      return sendJson(res, 201, { ok: true, url: `${origin}/?invite=${token}`, role, expiresAt });
+    }
+    if (url.pathname === "/api/access/revoke" && req.method === "POST") {
+      if (!isKeeper) return deny(res);
+      let body = {};
+      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      if (typeof body.userId !== "string") return sendJson(res, 400, { error: "bad user" });
+      if (body.userId === user.id) return sendJson(res, 400, { error: "Нельзя отозвать доступ у самого себя." });
+      const target = db.prepare("SELECT role, revokedAt FROM users WHERE id=?").get(body.userId);
+      if (!target || target.revokedAt) return sendJson(res, 404, { error: "Участник не найден или уже отозван." });
+      if (target.role === "keeper" && activeKeeperCount() <= 1) {
+        return sendJson(res, 400, { error: "Нельзя лишить архив единственного хранителя." });
+      }
+      db.prepare("UPDATE users SET revokedAt=? WHERE id=?").run(Date.now(), body.userId);
+      db.prepare("DELETE FROM sessions WHERE userId=?").run(body.userId);
+      return sendJson(res, 200, { ok: true });
+    }
+    if (url.pathname === "/api/access/role" && req.method === "POST") {
+      if (!isKeeper) return deny(res);
+      let body = {};
+      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      if (typeof body.userId !== "string" || !ROLES.includes(body.role)) return sendJson(res, 400, { error: "bad role" });
+      if (body.userId === user.id && body.role !== "keeper") {
+        return sendJson(res, 400, { error: "Хранитель не может понизить сам себя. Используйте передачу архива." });
+      }
+      if (body.role === "keeper" && body.userId === user.id) return sendJson(res, 400, { error: "Вы уже хранитель." });
+      const target = db.prepare("SELECT role, revokedAt FROM users WHERE id=?").get(body.userId);
+      if (!target || target.revokedAt) return sendJson(res, 404, { error: "Участник не найден." });
+      if (target.role === "keeper" && body.role !== "keeper" && activeKeeperCount() <= 1) {
+        return sendJson(res, 400, { error: "Нельзя лишить архив единственного хранителя." });
+      }
+      db.prepare("UPDATE users SET role=? WHERE id=? AND revokedAt IS NULL").run(body.role, body.userId);
+      db.prepare("UPDATE sessions SET role=? WHERE userId=?").run(body.role, body.userId);
+      return sendJson(res, 200, { ok: true });
+    }
+    // Передача архива: выбранный участник становится хранителем, владелец
+    // семейного пароля — редактором. Вернуть права сможет новый хранитель.
+    if (url.pathname === "/api/access/transfer" && req.method === "POST") {
+      if (!isKeeper) return deny(res);
+      let body = {};
+      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      const target = db.prepare("SELECT id,name FROM users WHERE id=? AND revokedAt IS NULL").get(String(body.userId || ""));
+      if (!target) return sendJson(res, 404, { error: "Участник не найден." });
+      db.prepare("UPDATE users SET role='keeper' WHERE id=?").run(target.id);
+      db.prepare("UPDATE sessions SET role='keeper' WHERE userId=?").run(target.id);
+      if (user.id === "owner") kvSet("owner_role", "editor");
+      return sendJson(res, 200, { ok: true, owner: target.name, selfRole: user.id === "owner" ? "editor" : user.role });
+    }
+    if (url.pathname === "/api/access/visibility" && req.method === "POST") {
+      if (!isKeeper) return deny(res);
+      let body = {};
+      try { body = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: "bad request" }); }
+      return sendJson(res, 200, { ok: true, visibility: setAccessSettings(body) });
+    }
+
     if (url.pathname === "/api/contribution-link" && req.method === "GET") {
+      if (!isKeeper) return deny(res);
       const origin = `${req.headers["x-forwarded-proto"] || "http"}://${req.headers.host}`;
       return sendJson(res, 200, { url: `${origin}/?contribute=${contributionToken()}` });
     }
     if (url.pathname === "/api/contributions" && req.method === "GET") {
+      if (!isKeeper) return deny(res);
       const rows = db.prepare("SELECT id,createdAt,payload FROM contributions WHERE status='pending' ORDER BY createdAt ASC").all();
       return sendJson(res, 200, { contributions: rows.map((row) => ({ id: row.id, createdAt: row.createdAt, ...JSON.parse(row.payload) })) });
     }
     const contributionAction = url.pathname.match(/^\/api\/contributions\/([a-f0-9]{24})\/(approve|reject)$/);
     if (contributionAction && req.method === "POST") {
+      if (!isKeeper) return deny(res);
       const [, id, action] = contributionAction;
       const row = db.prepare("SELECT status,payload FROM contributions WHERE id=?").get(id);
       if (!row || row.status !== "pending") return sendJson(res, 404, { error: "Заявка уже обработана или не найдена." });
@@ -579,6 +1096,7 @@ const server = http.createServer(async (req, res) => {
       try { checkArchive(archive); }
       catch (e) { return sendJson(res, 409, { error: "Связь противоречит данным архива. Отклоните заявку и добавьте человека вручную." }); }
       setArchive(archive);db.prepare("UPDATE contributions SET status='approved' WHERE id=?").run(id);
+      recordHistory([{ personId: person.id, at: Date.now(), authorId: user.id, authorName: user.name, action: "add", before: null, after: person }]);
       return sendJson(res, 200, { ok: true, personId: person.id, rev: archive.rev });
     }
     return sendJson(res, 404, { error: "not found" });

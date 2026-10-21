@@ -180,6 +180,13 @@ test("ссылка-приглашение требует сессию владе
   assert.equal(bad.status, 403);
 });
 
+test("версионирование схемы БД через PRAGMA user_version и /api/backup-status", async () => {
+  const res = await api("/api/backup-status");
+  assert.equal(res.status, 200);
+  const data = await body(res);
+  assert.ok(Number.isInteger(data.schemaVersion) && data.schemaVersion >= 3, `schemaVersion должен быть >= 3, получено: ${data.schemaVersion}`);
+});
+
 test("выход из сессии", async () => {
   const res = await api("/api/logout", { method: "POST" });
   assert.equal(res.status, 200);
