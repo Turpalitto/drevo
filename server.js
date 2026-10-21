@@ -307,7 +307,14 @@ function recordHistory(entries) {
 const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function changedFields(before, after) {
   const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
-  return [...keys].filter((k) => !sameValue(before?.[k], after?.[k]));
+  return [...keys].filter((k) => {
+    if (k === "masked") return false;
+    if (before?.masked === true && before[k] === undefined) {
+      const v = after?.[k];
+      if (v === null || v === "" || v === undefined || (Array.isArray(v) && v.length === 0)) return false;
+    }
+    return !sameValue(before?.[k], after?.[k]);
+  });
 }
 // Разница двух архивов на уровне людей: добавлен / изменён / удалён.
 function diffPeople(before, after) {
@@ -391,7 +398,13 @@ function applyPatches(archive, patches) {
     }
     const current = archive.people[idx];
     const fields = changedFields(patch.before, patch.after);
-    const changed = fields.filter((k) => !sameValue(current[k], patch.before?.[k]));
+    const changed = fields.filter((k) => {
+      if (patch.before?.masked === true && patch.before[k] === undefined) {
+        const cur = current[k];
+        if (cur === null || cur === "" || cur === undefined || (Array.isArray(cur) && cur.length === 0)) return false;
+      }
+      return !sameValue(current[k], patch.before?.[k]);
+    });
     if (changed.length) { conflicts.push({ id: patch.id, reason: "changed", fields: changed }); continue; }
     const next = { ...current };
     for (const k of fields) next[k] = patch.after?.[k];

@@ -626,7 +626,7 @@ body.role-viewer .quick-add-row,body.role-viewer #editPersonButton,body.role-vie
         <button id="emptyImportButton">Загрузить файл</button>
         <button id="demoButton" title="Показать демо-пример">Посмотреть демо</button>
       </div>
-      <p class="empty-privacy">🔒 Ваши данные хранятся только в этом браузере и не передаются в интернет без вашего ведома.</p>
+      <p class="empty-privacy" id="emptyPrivacy">🔒 Ваши данные хранятся только в этом браузере и не передаются в интернет без вашего ведома.</p>
     </div>
     <div class="boot-status" id="bootStatus">Загружаем архив…</div>
     <button class="recenter" id="recenterButton" type="button" hidden>К выбранному человеку</button>
@@ -1007,6 +1007,7 @@ try{
 const fields=["name","native","nameVariants","sex","teip","birth","death","father","mother","tukhum","notes","source","occupation","residence"];
 const extFields=["birthFull","deathFull","birthPlace","deathPlace","photo","info","birthQ","birthQ2","deathQ","deathQ2","birthPlaceNow","deathPlaceNow"];
 const allFields=[...fields,...extFields];
+const MASKED_FIELDS=["birth","death","birthFull","deathFull","birthQ","birthQ2","deathQ","deathQ2","birthPlace","deathPlace","birthPlaceNow","deathPlaceNow","teip","tukhum","occupation","residence","info","notes","source","photo","photoMeta","events","sources","memories","documents","unions"];
 const numeric=new Set(["birth","death","father","mother","birthQ2","deathQ2"]);
 const form=$("#personForm");
 const svg=$("#tree");
@@ -3231,6 +3232,15 @@ form.onsubmit=async e=>{
     .map(u=>({spouse:u.spouse,from:String(u.from||"").trim(),to:String(u.to||"").trim(),note:String(u.note||"").trim()}))
     .filter(u=>u.from||u.to||u.note)
     .slice(0,UNION_LIMIT);
+  if(previous&&previous.masked===true){
+    p.masked=true;
+    for(const key of MASKED_FIELDS){
+      if(previous[key]===undefined){
+        const v=p[key];
+        if(v===null||v===""||v===undefined||(Array.isArray(v)&&v.length===0))delete p[key];
+      }
+    }
+  }
   try{
     const next=copy(),index=next.people.findIndex(x=>x.id===id);
     if(index<0)next.people.push(p);else next.people[index]=p;
@@ -3248,7 +3258,7 @@ form.onsubmit=async e=>{
       if(!want&&has)person.spouses=person.spouses.filter(s=>s!==id);
     }
     commit(next,`${index<0?"Добавлен":"Изменён"}: ${p.name}`);
-    $("#personDialog").close();notify("Сведения сохранены в этом браузере.");
+    $("#personDialog").close();notify(serverMode?"Сведения сохранены в общей базе.":"Сведения сохранены в этом браузере.");
   }catch(err){$("#formError").textContent=err.message}
 };
 $("#deleteButton").onclick=async ()=>{
@@ -3340,6 +3350,8 @@ function applyRoleUi(){
   $("#titleForm").hidden=server&&!keeper;
   $("#settingsButton").title=keeper?"Управление архивом":"Экспорт и книга";
   const lb=$("#logoutButton");if(lb)lb.hidden=!server;
+  const ep=$("#emptyPrivacy");
+  if(ep)ep.textContent=server?"🔒 Данные хранятся на вашем семейном сервере и передаются по защищённому соединению.":"🔒 Ваши данные хранятся только в этом браузере и не передаются в интернет без вашего ведома.";
   if(editing!=null&&!$("#profileOverview").hidden)renderProfile(data.people.find(p=>p.id===editing));
 }
 // Значение поля в человеческом виде: имя вместо номера, «есть» вместо data:URL.

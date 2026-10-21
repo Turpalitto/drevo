@@ -198,6 +198,25 @@ test("скрытые поля не затираются предложением
   assert.equal(stored.birth, 1956, "год рождения не потерян");
 });
 
+test("редактирование замаскированного человека с пустыми полями формы не вызывает ложный конфликт", async () => {
+  const a = await json(await call("/api/archive", { cookie: editor }));
+  const musa = a.people.find((p) => p.id === 3);
+  assert.equal(musa.masked, true);
+  assert.equal(musa.birth, undefined);
+  const after = { ...musa, occupation: "главный инженер", birth: null, notes: "" };
+  const sent = await call("/api/proposals", {
+    method: "POST", cookie: editor,
+    body: JSON.stringify({ baseRev: a.rev, summary: "Профессия", patches: [{ op: "edit", id: 3, before: musa, after }] }),
+  });
+  const id = (await json(sent)).id;
+  const approved = await call(`/api/proposals/${id}/approve`, { method: "POST", cookie: keeper });
+  assert.equal(approved.status, 200, "предложение одобряется без ложного 409 конфликта");
+  const full = await json(await call("/api/archive", { cookie: keeper }));
+  const stored = full.people.find((p) => p.id === 3);
+  assert.equal(stored.occupation, "главный инженер");
+  assert.equal(stored.birth, 1956, "скрытый год рождения хранителя сохранился");
+});
+
 test("устаревшее предложение не применяется молча", async () => {
   const a = await json(await call("/api/archive", { cookie: editor }));
   const before = a.people.find((p) => p.id === 1);

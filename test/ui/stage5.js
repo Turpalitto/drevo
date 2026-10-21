@@ -140,6 +140,67 @@ function startServer() {
     })()`);
     check("хранитель входит по паролю и видит статус общей базы", keeperBadge.visible && keeperBadge.role === "keeper", JSON.stringify(keeperBadge));
 
+    // Проверка контекстного уведомления при сохранении в серверном режиме
+    await evaluate(send, `(()=>{
+      openPerson(1);
+      $("#editPersonButton").click();
+      $("#personForm").requestSubmit();
+      return true;
+    })()`);
+    await sleep(800);
+    const saveToast = await evaluate(send, `(()=>{
+      const t = $("#toast");
+      return t ? t.textContent : "";
+    })()`);
+    check("сохранение в серверном режиме показывает контекстное уведомление об общей базе", saveToast.includes("в общей базе"), saveToast);
+
+    // Проверка пояснения приватности в серверном режиме
+    const privacyText = await evaluate(send, `(()=>{
+      const ep = $("#emptyPrivacy");
+      return ep ? ep.textContent : "";
+    })()`);
+    check("текст приватности в серверном режиме поясняет защиту семейного сервера", privacyText.includes("семейном сервере"), privacyText);
+
+    // Проверка защиты от XSS в заявках гостей
+    const linkRes = await fetch(`${base}/api/contribution-link`, { headers: { Cookie: keeperCookie } });
+    const linkData = await linkRes.json();
+    const guestToken = new URL(linkData.url).searchParams.get("contribute");
+    const contribPost = await fetch(`${base}/api/contributions?token=${encodeURIComponent(guestToken)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        submittedBy: "Гость <script>window.__xssRun=true</script>",
+        contact: "test@example.com",
+        relativeId: 1,
+        secondParentId: null,
+        relation: "child",
+        name: "Ребёнок <img src=x onerror=window.__xssRun=true><b id=\"xssMarker\">тест</b>",
+        sex: "M",
+        birth: null,
+        birthPlace: "",
+        info: "<script>window.__xssRun=true</script>",
+        notes: "Заметка <img src=x onerror=window.__xssRun=true>",
+      }),
+    });
+    await evaluate(send, `(async () => {
+      await refreshContributions();
+      $("#submissionsButton").click();
+      return true;
+    })()`);
+    await sleep(600);
+    const xssCheck = await evaluate(send, `(()=>{
+      const marker = document.getElementById("xssMarker");
+      const list = $("#submissionList");
+      const text = list ? list.textContent : "";
+      return {
+        xssExecuted: !!window.__xssRun,
+        markerInDom: !!marker,
+        textContainsRawTag: text.includes("<img src=x"),
+      };
+    })()`);
+    check("заявки гостей защищены от XSS (теги выводятся как текст без выполнения)", !xssCheck.xssExecuted && !xssCheck.markerInDom && xssCheck.textContainsRawTag, JSON.stringify(xssCheck));
+    await evaluate(send, `$("#submissionsDialog").close(); true`);
+
     // 3. Создание ссылки-приглашения для редактора
     await evaluate(send, `openAccess(); true`);
     await sleep(400);
