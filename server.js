@@ -285,6 +285,48 @@ function diffPeople(before, after) {
 // которые человек действительно правил: скрытые от него данные не затираются.
 function applyPatches(archive, patches) {
   const conflicts = [], applied = [];
+  const idMap = new Map();
+
+  // Первый проход: для op "add" сервер выдаёт новый уникальный id
+  for (const patch of patches) {
+    if (!patch || !Number.isSafeInteger(patch.id)) continue;
+    if (patch.op === "add") {
+      const allIds = [...archive.people.map((p) => p.id), ...Array.from(idMap.values())];
+      const newId = Math.max(0, ...allIds) + 1;
+      idMap.set(patch.id, newId);
+    }
+  }
+
+  // Перепривязка ссылок внутри того же пакета предложений
+  function remapPerson(p) {
+    if (!p || typeof p !== "object") return;
+    if (idMap.has(p.father)) p.father = idMap.get(p.father);
+    if (idMap.has(p.mother)) p.mother = idMap.get(p.mother);
+    if (Array.isArray(p.spouses)) {
+      p.spouses = p.spouses.map((s) => idMap.has(s) ? idMap.get(s) : s);
+    }
+    if (Array.isArray(p.unions)) {
+      for (const u of p.unions) {
+        if (u && idMap.has(u.spouse)) u.spouse = idMap.get(u.spouse);
+      }
+    }
+    if (p.photoMeta && Array.isArray(p.photoMeta.people)) {
+      p.photoMeta.people = p.photoMeta.people.map((id) => idMap.has(id) ? idMap.get(id) : id);
+    }
+  }
+
+  if (idMap.size > 0) {
+    for (const patch of patches) {
+      if (!patch) continue;
+      if (patch.op === "add" && idMap.has(patch.id)) {
+        patch.id = idMap.get(patch.id);
+        if (patch.after) patch.after.id = patch.id;
+      }
+      if (patch.after) remapPerson(patch.after);
+      if (patch.before) remapPerson(patch.before);
+    }
+  }
+
   for (const patch of patches) {
     if (!patch || !Number.isSafeInteger(patch.id)) { conflicts.push({ id: null, reason: "bad" }); continue; }
     if (patch.op === "add") {

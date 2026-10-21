@@ -481,6 +481,96 @@ test("В4: успешные входы сбрасывают лимит попы�
   }
 });
 
+test("В5: два редактора предлагают «add» с одинаковым id — оба предложения принимаются, id разные, связи верные", async () => {
+  // 1. Создаём приглашения для двух редакторов
+  const inv1 = await api("/api/access/invite", { method: "POST", body: JSON.stringify({ role: "editor", note: "Редактор А" }) });
+  const token1 = (await body(inv1)).url.split("invite=")[1];
+  const acc1 = await fetch(BASE + `/api/invite/${token1}/accept`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Редактор А" }),
+  });
+  const cookieA = acc1.headers.get("set-cookie").split(";")[0];
+
+  const inv2 = await api("/api/access/invite", { method: "POST", body: JSON.stringify({ role: "editor", note: "Редактор Б" }) });
+  const token2 = (await body(inv2)).url.split("invite=")[1];
+  const acc2 = await fetch(BASE + `/api/invite/${token2}/accept`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Редактор Б" }),
+  });
+  const cookieB = acc2.headers.get("set-cookie").split(";")[0];
+
+  const currentArchive = await body(await api("/api/archive"));
+  const baseRev = currentArchive.rev;
+  const commonProposedId = 888; // оба редактора локально выбрали одинаковый id
+
+  // Редактор А предлагает добавить человека с id 888 (ребёнок Ахмеда)
+  const propA = await fetch(BASE + "/api/proposals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookieA },
+    body: JSON.stringify({
+      baseRev,
+      summary: "Добавлен сын Редактором А",
+      patches: [{
+        op: "add",
+        id: commonProposedId,
+        before: null,
+        after: {
+          id: commonProposedId, uid: crypto.randomUUID(), name: "Сын от Редактора А",
+          native: "", sex: "M", teip: "", birth: 1970, death: null, father: 1, mother: null,
+          tukhum: "", notes: "", source: "", birthFull: "", deathFull: "", birthPlace: "",
+          deathPlace: "", photo: "", info: "", occupation: "", residence: "", spouses: [],
+          events: [], sources: [], memories: [],
+        },
+      }],
+    }),
+  });
+  assert.equal(propA.status, 201);
+  const { id: propIdA } = await body(propA);
+
+  // Редактор Б предлагает добавить человека с тем же id 888 (дочь Аминат)
+  const propB = await fetch(BASE + "/api/proposals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookieB },
+    body: JSON.stringify({
+      baseRev,
+      summary: "Добавлена дочь Редактором Б",
+      patches: [{
+        op: "add",
+        id: commonProposedId,
+        before: null,
+        after: {
+          id: commonProposedId, uid: crypto.randomUUID(), name: "Дочь от Редактора Б",
+          native: "", sex: "F", teip: "", birth: 1972, death: null, father: null, mother: 2,
+          tukhum: "", notes: "", source: "", birthFull: "", deathFull: "", birthPlace: "",
+          deathPlace: "", photo: "", info: "", occupation: "", residence: "", spouses: [],
+          events: [], sources: [], memories: [],
+        },
+      }],
+    }),
+  });
+  assert.equal(propB.status, 201);
+  const { id: propIdB } = await body(propB);
+
+  // Хранитель одобряет первое предложение
+  const appA = await api(`/api/proposals/${propIdA}/approve`, { method: "POST" });
+  assert.equal(appA.status, 200);
+
+  // Хранитель одобряет второе предложение (с тем же исходным id 888)
+  const appB = await api(`/api/proposals/${propIdB}/approve`, { method: "POST" });
+  assert.equal(appB.status, 200, "второе предложение принимается без конфликта id");
+
+  // Проверяем архив: оба человека добавлены, имеют РАЗНЫЕ id и корректные связи
+  const finalArchive = await body(await api("/api/archive"));
+  const personA = finalArchive.people.find((p) => p.name === "Сын от Редактора А");
+  const personB = finalArchive.people.find((p) => p.name === "Дочь от Редактора Б");
+
+  assert.ok(personA, "человек от Редактора А добавлен");
+  assert.ok(personB, "человек от Редактора Б добавлен");
+  assert.notEqual(personA.id, personB.id, "сервер выделил разные id для добавленных людей");
+  assert.equal(personA.father, 1, "связь отца у персоны А верна");
+  assert.equal(personB.mother, 2, "связь матери у персоны Б верна");
+});
+
 test("выход из сессии", async () => {
   const res = await api("/api/logout", { method: "POST" });
   assert.equal(res.status, 200);
