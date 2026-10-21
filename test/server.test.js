@@ -571,6 +571,51 @@ test("В5: два редактора предлагают «add» с одина�
   assert.equal(personB.mother, 2, "связь матери у персоны Б верна");
 });
 
+test("С3: фото в истории заменяется на photoRef, откат с маркером не удаляет фото", async () => {
+  const currentArchive = await body(await api("/api/archive"));
+  const samplePhoto = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP...";
+  const targetPersonId = 1;
+
+  // 1. Устанавливаем фото и исходную профессию
+  const state1 = {
+    ...currentArchive,
+    rev: currentArchive.rev + 1,
+    people: currentArchive.people.map((p) => p.id === targetPersonId ? { ...p, photo: samplePhoto, occupation: "Кузнец" } : p),
+  };
+  const put1 = await api("/api/archive", { method: "PUT", body: JSON.stringify({ baseRev: currentArchive.rev, archive: state1 }) });
+  assert.equal(put1.status, 200);
+
+  // 2. Меняем профессию на "Мастер", фото остаётся
+  const state2 = {
+    ...state1,
+    rev: state1.rev + 1,
+    people: state1.people.map((p) => p.id === targetPersonId ? { ...p, occupation: "Мастер" } : p),
+  };
+  const put2 = await api("/api/archive", { method: "PUT", body: JSON.stringify({ baseRev: state1.rev, archive: state2 }) });
+  assert.equal(put2.status, 200);
+
+  // 3. Проверяем, что в истории хранится маркер photoRef, а не полный base64
+  const histRes = await api(`/api/history?personId=${targetPersonId}`);
+  assert.equal(histRes.status, 200);
+  const { history } = await body(histRes);
+  assert.ok(history.length > 0, "история содержит записи");
+
+  const latestEdit = history[0];
+  assert.ok(latestEdit.before.photo && typeof latestEdit.before.photo === "object", "before.photo является объектом-маркером");
+  assert.ok(typeof latestEdit.before.photo.photoRef === "string", "маркер содержит строку photoRef");
+  assert.ok(latestEdit.after.photo && typeof latestEdit.after.photo === "object", "after.photo является объектом-маркером");
+
+  // 4. Откатываем изменение через /api/history/:id/restore
+  const restoreRes = await api(`/api/history/${latestEdit.id}/restore`, { method: "POST" });
+  assert.equal(restoreRes.status, 200);
+
+  // 5. Проверяем архив: профессия вернулась в "Кузнец", а фото НЕ удалилось и НЕ заменилось маркером
+  const restoredArchive = await body(await api("/api/archive"));
+  const restoredPerson = restoredArchive.people.find((p) => p.id === targetPersonId);
+  assert.equal(restoredPerson.occupation, "Кузнец", "профессия откатилась");
+  assert.equal(restoredPerson.photo, samplePhoto, "фото сохранилось в неизменном виде");
+});
+
 test("выход из сессии", async () => {
   const res = await api("/api/logout", { method: "POST" });
   assert.equal(res.status, 200);

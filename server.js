@@ -251,12 +251,24 @@ function setArchive(a) {
 // Храним снимок «до» и «после»: этого достаточно, чтобы показать автору и
 // времени, что именно изменилось, и вернуть прежние данные.
 const HISTORY_LIMIT = 5000;
+function maskPhotoForHistory(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+  if (!obj.photo) return obj;
+  if (typeof obj.photo === "object" && typeof obj.photo.photoRef === "string") return obj;
+  const copy = { ...obj };
+  const sample = typeof obj.photo === "string" ? obj.photo.slice(0, 100) : String(obj.photo);
+  const hash = crypto.createHash("sha256").update(sample).digest("hex");
+  copy.photo = { photoRef: hash };
+  return copy;
+}
 function recordHistory(entries) {
   if (!entries.length) return;
   const stmt = db.prepare("INSERT INTO history(personId,at,authorId,authorName,action,before,after) VALUES(?,?,?,?,?,?,?)");
   for (const e of entries) {
+    const maskedBefore = maskPhotoForHistory(e.before);
+    const maskedAfter = maskPhotoForHistory(e.after);
     stmt.run(e.personId, e.at, e.authorId || "", e.authorName || "", e.action || "edit",
-      e.before == null ? null : JSON.stringify(e.before), e.after == null ? null : JSON.stringify(e.after));
+      maskedBefore == null ? null : JSON.stringify(maskedBefore), maskedAfter == null ? null : JSON.stringify(maskedAfter));
   }
   const count = db.prepare("SELECT COUNT(*) AS n FROM history").get().n;
   if (count > HISTORY_LIMIT) {
@@ -1118,8 +1130,12 @@ const server = http.createServer(async (req, res) => {
       if (!target) return sendJson(res, 409, { error: "Для этой записи нет прежней версии." });
       if (idx < 0) return sendJson(res, 409, { error: "Человек удалён из архива." });
       const before = archive.people[idx];
-      archive.people[idx] = { ...target };
-      try { saveApplied(archive, [{ id: row.personId, action: "restore", before, after: target }], user, `Возвращена прежняя версия записи`); }
+      const nextPerson = { ...target };
+      if (nextPerson.photo && typeof nextPerson.photo === "object" && typeof nextPerson.photo.photoRef === "string") {
+        nextPerson.photo = before.photo || "";
+      }
+      archive.people[idx] = nextPerson;
+      try { saveApplied(archive, [{ id: row.personId, action: "restore", before, after: nextPerson }], user, `Возвращена прежняя версия записи`); }
       catch (e) { return sendJson(res, 409, { error: "Прежняя версия противоречит текущим связям. Проверьте вручную." }); }
       return sendJson(res, 200, { ok: true, rev: archive.rev });
     }
