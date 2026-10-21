@@ -676,6 +676,65 @@ test("С6: миграция v5 хеширует токены сессий в sha
   }
 });
 
+test("С9: автоматическое дополнение взаимных связей супругов при сохранении и откате из истории", async () => {
+  // 1. Читаем текущий архив
+  const res1 = await api("/api/archive");
+  const cur = await body(res1);
+  const p1 = cur.people.find((p) => p.id === 1);
+  const p2 = cur.people.find((p) => p.id === 2);
+  assert.ok(p1 && p2, "персоны 1 и 2 найдены");
+
+  // 2. Отправляем архив, где у персоны 1 указан супруг 2, а у персоны 2 список супругов пуст
+  const modPeople = cur.people.map((p) => {
+    if (p.id === 1) return { ...p, spouses: [2] };
+    if (p.id === 2) return { ...p, spouses: [] };
+    return p;
+  });
+  const putRes = await api("/api/archive", {
+    method: "PUT",
+    body: JSON.stringify({ baseRev: cur.rev, archive: { ...cur, people: modPeople } }),
+  });
+  assert.equal(putRes.status, 200);
+
+  // 3. Проверяем, что server дополнил spouses у персоны 2 взаимной ссылкой на 1
+  const res2 = await api("/api/archive");
+  const updated = await body(res2);
+  const up1 = updated.people.find((p) => p.id === 1);
+  const up2 = updated.people.find((p) => p.id === 2);
+  assert.ok(up1.spouses.includes(2), "у 1 есть супруг 2");
+  assert.ok(up2.spouses.includes(1), "у 2 взаимно появился супруг 1");
+
+  // 4. Теперь редактируем персону 1: удаляем супруга 2 (чтобы в истории осталась запись со spouses: [2])
+  const modPeople2 = updated.people.map((p) => {
+    if (p.id === 1) return { ...p, spouses: [] };
+    if (p.id === 2) return { ...p, spouses: [] };
+    return p;
+  });
+  const putRes2 = await api("/api/archive", {
+    method: "PUT",
+    body: JSON.stringify({ baseRev: updated.rev, archive: { ...updated, people: modPeople2 } }),
+  });
+  assert.equal(putRes2.status, 200);
+
+  // 5. В истории персоны 1 находим запись, где before.spouses содержал 2
+  const histRes = await api("/api/history?personId=1");
+  const { history } = await body(histRes);
+  const entryWithSpouse = history.find((h) => h.before && Array.isArray(h.before.spouses) && h.before.spouses.includes(2));
+  assert.ok(entryWithSpouse, "найдена запись истории с супругом 2");
+
+  // 6. Откатываем персону 1 к версии с супругом 2
+  const restoreRes = await api(`/api/history/${entryWithSpouse.id}/restore`, { method: "POST" });
+  assert.equal(restoreRes.status, 200);
+
+  // 7. Проверяем, что взаимная связь восстановилась у обоих
+  const res3 = await api("/api/archive");
+  const restored = await body(res3);
+  const r1 = restored.people.find((p) => p.id === 1);
+  const r2 = restored.people.find((p) => p.id === 2);
+  assert.ok(r1.spouses.includes(2), "после отката у 1 есть супруг 2");
+  assert.ok(r2.spouses.includes(1), "после отката у 2 взаимно восстановился супруг 1");
+});
+
 test("выход из сессии", async () => {
   const res = await api("/api/logout", { method: "POST" });
   assert.equal(res.status, 200);

@@ -595,9 +595,31 @@ function validatePeople(people) {
   }
   if (queue.length !== people.length) throw Error("cycle");
 }
+function ensureSymmetricSpouses(archive) {
+  if (!archive || !Array.isArray(archive.people)) return;
+  const map = new Map();
+  for (const p of archive.people) {
+    if (p && Number.isSafeInteger(p.id)) {
+      if (!Array.isArray(p.spouses)) p.spouses = [];
+      map.set(p.id, p);
+    }
+  }
+  for (const p of archive.people) {
+    if (!p || !Array.isArray(p.spouses)) continue;
+    for (const sid of p.spouses) {
+      const spouse = map.get(sid);
+      if (spouse && spouse.id !== p.id) {
+        if (!spouse.spouses.includes(p.id)) {
+          spouse.spouses.push(p.id);
+        }
+      }
+    }
+  }
+}
 function checkArchive(v) {
   if (!v || v.format !== "korni-local" || v.version !== 1) throw Error("bad format");
   if (typeof v.title !== "string" || !v.title.trim() || v.title.length > 100) throw Error("bad title");
+  ensureSymmetricSpouses(v);
   validatePeople(v.people);
 }
 
