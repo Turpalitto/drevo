@@ -14,10 +14,11 @@ const PASSWORD = "тест-пароль-42";
 
 let server = null;
 let cookie = "";
+let testDataDir = "";
 
 function startServer() {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "korni-test-"));
-  const env = { ...process.env, KORNI_PASSWORD: PASSWORD, DATA_DIR: dataDir, PORT: String(PORT) };
+  if (!testDataDir) testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "korni-test-"));
+  const env = { ...process.env, KORNI_PASSWORD: PASSWORD, DATA_DIR: testDataDir, PORT: String(PORT) };
   server = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], { env, stdio: "pipe" });
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error("сервер не запустился за 10с")), 10000);
@@ -185,6 +186,67 @@ test("версионирование схемы БД через PRAGMA user_vers
   assert.equal(res.status, 200);
   const data = await body(res);
   assert.ok(Number.isInteger(data.schemaVersion) && data.schemaVersion >= 3, `schemaVersion должен быть >= 3, получено: ${data.schemaVersion}`);
+});
+
+test("В3: ежедневная копия фиксирует состояние до первой правки дня, перезапуск не перезаписывает", async () => {
+  const day = new Date().toISOString().slice(0, 10);
+  const backupsDir = path.join(testDataDir, "backups");
+  const jsonBackup = path.join(backupsDir, `korni-${day}.json`);
+
+  // Удаляем бэкап за сегодня, если он успел создаться предыдущими тестами
+  if (fs.existsSync(jsonBackup)) fs.unlinkSync(jsonBackup);
+
+  // Получаем текущее состояние архива (до правки 1)
+  const stateBefore = await body(await api("/api/archive"));
+  const revBefore = stateBefore.rev || 1;
+
+  // Правка 1
+  const state1 = {
+    ...stateBefore,
+    rev: revBefore + 1,
+    people: [...stateBefore.people, { id: 991, name: "Тест Правка 1", native: "", sex: "M", teip: "", birth: 1980, death: null, father: null, mother: null, tukhum: "", notes: "", source: "", birthFull: "", deathFull: "", birthPlace: "", deathPlace: "", photo: "", info: "", spouses: [] }],
+  };
+  const put1 = await api("/api/archive", { method: "PUT", body: JSON.stringify({ baseRev: revBefore, archive: state1 }) });
+  assert.equal(put1.status, 200);
+
+  // Проверяем, что в бэкапе сохранилось состояние ДО правки 1
+  assert.ok(fs.existsSync(jsonBackup), "файл ежедневного бэкапа создан");
+  const backup1 = JSON.parse(fs.readFileSync(jsonBackup, "utf8"));
+  assert.ok(!backup1.people.some((p) => p.name === "Тест Правка 1"), "бэкап содержит состояние ДО правки 1");
+  assert.equal(backup1.people.length, stateBefore.people.length);
+
+  // Правка 2 в тот же день
+  const state2 = {
+    ...state1,
+    rev: state1.rev + 1,
+    people: [...state1.people, { id: 992, name: "Тест Правка 2", native: "", sex: "M", teip: "", birth: 1982, death: null, father: null, mother: null, tukhum: "", notes: "", source: "", birthFull: "", deathFull: "", birthPlace: "", deathPlace: "", photo: "", info: "", spouses: [] }],
+  };
+  const put2 = await api("/api/archive", { method: "PUT", body: JSON.stringify({ baseRev: state1.rev, archive: state2 }) });
+  assert.equal(put2.status, 200);
+
+  // Бэкап не перезаписан правкой 2
+  const backup2 = JSON.parse(fs.readFileSync(jsonBackup, "utf8"));
+  assert.ok(!backup2.people.some((p) => p.name === "Тест Правка 2"), "бэкап не перезаписан правкой 2");
+  assert.equal(backup2.people.length, stateBefore.people.length);
+
+  // Перезапуск сервера
+  server.kill("SIGTERM");
+  await new Promise((r) => setTimeout(r, 200));
+  await startServer();
+
+  // Правка 3 после перезапуска в тот же день
+  const state3 = {
+    ...state2,
+    rev: state2.rev + 1,
+    people: [...state2.people, { id: 993, name: "Тест Правка 3", native: "", sex: "M", teip: "", birth: 1984, death: null, father: null, mother: null, tukhum: "", notes: "", source: "", birthFull: "", deathFull: "", birthPlace: "", deathPlace: "", photo: "", info: "", spouses: [] }],
+  };
+  const put3 = await api("/api/archive", { method: "PUT", body: JSON.stringify({ baseRev: state2.rev, archive: state3 }) });
+  assert.equal(put3.status, 200);
+
+  // После перезапуска файл бэкапа по-прежнему не перезаписан
+  const backup3 = JSON.parse(fs.readFileSync(jsonBackup, "utf8"));
+  assert.ok(!backup3.people.some((p) => p.name === "Тест Правка 3"), "после перезапуска бэкап дня не перезаписан");
+  assert.equal(backup3.people.length, stateBefore.people.length);
 });
 
 test("выход из сессии", async () => {

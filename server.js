@@ -230,8 +230,8 @@ function refreshPasswordHash() {
 refreshPasswordHash();
 
 function setArchive(a) {
+  backupDailyBefore();
   db.prepare("INSERT INTO kv(key,value) VALUES('archive',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(a));
-  backupDaily(a);
 }
 
 // --- история изменений по человеку ---
@@ -317,32 +317,47 @@ function saveApplied(archive, applied, author, summary) {
 }
 
 // --- ежедневные автоматические копии архива ---
+// Снимок дня сохраняет состояние ДО первой правки дня (граница суток — по UTC).
+// Наличие файла korni-<день>.json служит признаком того, что копия за день уже
+// создана, исключая повторную перезапись как внутри процесса, так и после перезапуска.
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 const KEEP_BACKUPS = 30;
-let lastBackupDay = "";
 function sqlQuote(value) {
   return "'" + String(value).replace(/'/g, "''") + "'";
 }
 function setBackupStatus(status) {
   try { kvSet("backup_status", JSON.stringify(status)); } catch (e) { /* статус не важнее самой копии */ }
 }
-function backupDaily(archive) {
-  if (!archive || !Array.isArray(archive.people) || archive.people.length === 0) return;
+function backupDailyBefore() {
   const day = new Date().toISOString().slice(0, 10);
+  const jsonFile = path.join(BACKUPS_DIR, `korni-${day}.json`);
+  const dbFile = path.join(BACKUPS_DIR, `korni-${day}.db`);
+  if (fs.existsSync(jsonFile)) return; // сегодня уже сохранили состояние до первой правки
+
+  let existing = null;
   try {
-    if (day === lastBackupDay) return; // сегодня уже сохранили
+    const row = db.prepare("SELECT value FROM kv WHERE key='archive'").get();
+    if (row && row.value) existing = JSON.parse(row.value);
+  } catch (e) {
+    return;
+  }
+  if (!existing || !Array.isArray(existing.people) || existing.people.length === 0) return;
+
+  try {
     fs.mkdirSync(BACKUPS_DIR, { recursive: true });
-    fs.writeFileSync(path.join(BACKUPS_DIR, `korni-${day}.json`), JSON.stringify(archive, null, 2));
+    fs.writeFileSync(jsonFile, JSON.stringify(existing, null, 2));
     // Плюс согласованный снимок всей базы (архив, сессии, заявки) одним файлом:
     // VACUUM INTO безопаснее копирования файла на живой базе.
-    const dbFile = path.join(BACKUPS_DIR, `korni-${day}.db`);
     let dbOk = fs.existsSync(dbFile);
-    if (!dbOk) { // VACUUM INTO не перезаписывает существующий файл
-      try { db.exec(`VACUUM INTO ${sqlQuote(dbFile)}`); dbOk = fs.existsSync(dbFile); }
-      catch (e) { console.warn("Не удалось снять снимок базы:", e.message); }
+    if (!dbOk) {
+      try {
+        db.exec(`VACUUM INTO ${sqlQuote(dbFile)}`);
+        dbOk = fs.existsSync(dbFile);
+      } catch (e) {
+        console.warn("Не удалось снять снимок базы:", e.message);
+      }
     }
-    lastBackupDay = day;
-    setBackupStatus({ at: new Date().toISOString(), day, ok: true, people: archive.people.length, db: dbOk });
+    setBackupStatus({ at: new Date().toISOString(), day, ok: true, people: existing.people.length, db: dbOk });
     // Ротация по датам: у одного дня может быть и .json, и .db.
     const days = [...new Set(fs.readdirSync(BACKUPS_DIR)
       .filter((f) => /^korni-\d{4}-\d{2}-\d{2}\.(json|db)$/.test(f))
